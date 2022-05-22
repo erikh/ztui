@@ -1,5 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
+    io::BufRead,
     path::Path,
     time::{Duration, Instant},
 };
@@ -159,7 +160,7 @@ fn display_networks<B: Backend>(f: &mut Frame<'_, B>, app: &mut App) -> Result<(
 
     let titleblock = Block::default()
         .borders(Borders::TOP | Borders::LEFT | Borders::RIGHT)
-        .title("ZeroTier Terminal UI");
+        .title("[ ZeroTier Terminal UI ]");
 
     let (s, mut r) = mpsc::unbounded_channel();
 
@@ -263,7 +264,7 @@ fn display_networks<B: Backend>(f: &mut Frame<'_, B>, app: &mut App) -> Result<(
 fn display_help<B: Backend>(f: &mut Frame<B>) -> Result<(), anyhow::Error> {
     let block = Block::default()
         .borders(Borders::ALL)
-        .title(Span::from("Help"));
+        .title(Span::from("[ Help ]"));
 
     let help_text = vec![
         "Up/Down = Navigate the List",
@@ -277,22 +278,29 @@ fn display_help<B: Backend>(f: &mut Frame<B>) -> Result<(), anyhow::Error> {
 
     let ht2 = help_text.clone();
     let mut x = 0;
-    'outer: loop {
+    loop {
+        if help_text.len() < x {
+            break;
+        }
         let mut three = Vec::new();
-        for i in 0..2 {
+        for i in 0..3 {
             if help_text.len() <= i + x {
-                break 'outer;
+                break;
             }
             three.push(help_text[i + x]);
         }
         x += 3;
         let mut s = Vec::new();
-        for t in three {
+        let mut y = 0;
+        for t in &three {
+            y += 1;
             s.push(Span::from(t.to_string()));
-            s.push(Span::raw(" ".repeat(
-                1 + get_max_len(ht2.iter().map(|s| s.to_string()).collect::<Vec<String>>())
-                    - t.len(),
-            )));
+            if y < 3 {
+                s.push(Span::raw(" ".repeat(
+                    1 + get_max_len(ht2.iter().map(|s| s.to_string()).collect::<Vec<String>>())
+                        - t.len(),
+                )));
+            }
         }
 
         spans.push(Spans::from(s));
@@ -314,10 +322,41 @@ async fn leave_network(network_id: String) -> Result<(), anyhow::Error> {
     Ok(*client.delete_network(&network_id).await?)
 }
 
-async fn join_network(network_id: String, app: App) -> Result<(), anyhow::Error> {
+async fn join_network(network_id: String) -> Result<(), anyhow::Error> {
     let client = local_client_from_file(authtoken_path(None))?;
     client
-        .update_network(&network_id, &app.savednetworks.get(&network_id).unwrap())
+        .update_network(
+            &network_id,
+            &Network {
+                subtype_0: zerotier_one_api::types::NetworkSubtype0 {
+                    allow_default: None,
+                    allow_dns: None,
+                    allow_global: None,
+                    allow_managed: None,
+                },
+                subtype_1: zerotier_one_api::types::NetworkSubtype1 {
+                    allow_default: None,
+                    allow_dns: None,
+                    allow_global: None,
+                    allow_managed: None,
+                    assigned_addresses: Vec::new(),
+                    bridge: None,
+                    broadcast_enabled: None,
+                    dns: None,
+                    id: None,
+                    mac: None,
+                    mtu: None,
+                    multicast_subscriptions: Vec::new(),
+                    name: None,
+                    netconf_revision: None,
+                    port_device_name: None,
+                    port_error: None,
+                    routes: Vec::new(),
+                    status: None,
+                    type_: None,
+                },
+            },
+        )
         .await?;
     Ok(())
 }
@@ -367,7 +406,12 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> std::io::Re
                         'j' => {
                             let pos = app.liststate.selected().unwrap_or_default();
                             let id = app.savednetworksidx[pos].clone();
-                            tokio::spawn(join_network(id, app.clone()));
+                            tokio::spawn(join_network(id));
+                        }
+                        'J' => {
+                            let mut network_id = String::new();
+                            std::io::stdin().lock().read_line(&mut network_id)?;
+                            tokio::spawn(join_network(network_id));
                         }
                         _ => {}
                     },
