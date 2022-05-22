@@ -21,6 +21,7 @@ use tui::{
 };
 use zerotier_one_api::types::Network;
 
+#[derive(Debug, Clone)]
 struct App {
     listitems: Vec<ListItem<'static>>,
     liststate: ListState,
@@ -146,7 +147,7 @@ fn get_max_savednetworks(networks: HashMap<String, Network>) -> usize {
     get_max_len(
         networks
             .iter()
-            .map(|(k, v)| v.subtype_1.name.clone().unwrap())
+            .map(|(_, v)| v.subtype_1.name.clone().unwrap())
             .collect::<Vec<String>>(),
     )
 }
@@ -233,7 +234,7 @@ fn display_networks<B: Backend>(f: &mut Frame<'_, B>, app: &mut App) -> Result<(
                             app.savednetworks
                                 .clone()
                                 .iter()
-                                .map(|(k, v)| v.subtype_1.status.clone().unwrap())
+                                .map(|(_, v)| v.subtype_1.status.clone().unwrap())
                                 .collect::<Vec<String>>(),
                         ) - v.subtype_1.status.clone().unwrap_or_default().len(),
                     ),
@@ -262,10 +263,42 @@ fn display_networks<B: Backend>(f: &mut Frame<'_, B>, app: &mut App) -> Result<(
 fn display_help<B: Backend>(f: &mut Frame<B>) -> Result<(), anyhow::Error> {
     let block = Block::default()
         .borders(Borders::ALL)
-        .title(Span::from("A title"));
-    let span = Span::from("here's a widget");
+        .title(Span::from("Help"));
 
-    let para = Paragraph::new(span).block(block).wrap(Wrap { trim: true });
+    let help_text = vec![
+        "Up/Down = Navigate the List",
+        "d = Delete a list member",
+        "q = Quit",
+        "j = Join a bookmarked network",
+        "l = Leave a bookmarked network",
+    ];
+
+    let mut spans = Vec::new();
+
+    let ht2 = help_text.clone();
+    let mut x = 0;
+    'outer: loop {
+        let mut three = Vec::new();
+        for i in 0..2 {
+            if help_text.len() <= i + x {
+                break 'outer;
+            }
+            three.push(help_text[i + x]);
+        }
+        x += 3;
+        let mut s = Vec::new();
+        for t in three {
+            s.push(Span::from(t.to_string()));
+            s.push(Span::raw(" ".repeat(
+                1 + get_max_len(ht2.iter().map(|s| s.to_string()).collect::<Vec<String>>())
+                    - t.len(),
+            )));
+        }
+
+        spans.push(Spans::from(s));
+    }
+
+    let para = Paragraph::new(spans).block(block).wrap(Wrap { trim: true });
 
     let (w, h) = crossterm::terminal::size()?;
     let mut rect = Rect::default();
@@ -273,6 +306,19 @@ fn display_help<B: Backend>(f: &mut Frame<B>) -> Result<(), anyhow::Error> {
     rect.width = w;
     rect.height = h - rect.y;
     f.render_widget(para, rect);
+    Ok(())
+}
+
+async fn leave_network(network_id: String) -> Result<(), anyhow::Error> {
+    let client = local_client_from_file(authtoken_path(None))?;
+    Ok(*client.delete_network(&network_id).await?)
+}
+
+async fn join_network(network_id: String, app: App) -> Result<(), anyhow::Error> {
+    let client = local_client_from_file(authtoken_path(None))?;
+    client
+        .update_network(&network_id, &app.savednetworks.get(&network_id).unwrap())
+        .await?;
     Ok(())
 }
 
@@ -312,6 +358,16 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> std::io::Re
                             app.savednetworksidx =
                                 app.savednetworksidx.splice(pos - 1..pos, []).collect();
                             app.savednetworks.remove(&id);
+                        }
+                        'l' => {
+                            let pos = app.liststate.selected().unwrap_or_default();
+                            let id = app.savednetworksidx[pos].clone();
+                            tokio::spawn(leave_network(id));
+                        }
+                        'j' => {
+                            let pos = app.liststate.selected().unwrap_or_default();
+                            let id = app.savednetworksidx[pos].clone();
+                            tokio::spawn(join_network(id, app.clone()));
                         }
                         _ => {}
                     },
