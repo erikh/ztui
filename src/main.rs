@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     path::Path,
     time::{Duration, Instant},
 };
@@ -25,6 +25,7 @@ struct App {
     listitems: Vec<ListItem<'static>>,
     liststate: ListState,
     savednetworks: HashMap<String, Network>,
+    savednetworksidx: Vec<String>,
 }
 
 #[tokio::main]
@@ -36,6 +37,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let mut terminal = Terminal::new(backend)?;
     let mut app = App {
+        savednetworksidx: Vec::new(),
         savednetworks: HashMap::new(),
         listitems: Vec::new(),
         liststate: ListState::default(),
@@ -126,6 +128,29 @@ async fn get_networks(s: mpsc::UnboundedSender<Vec<Network>>) -> Result<(), anyh
     Ok(())
 }
 
+fn get_max_len(networks: Vec<String>) -> usize {
+    networks
+        .iter()
+        .max_by(|k, k2| {
+            if k.len() > k2.len() {
+                std::cmp::Ordering::Greater
+            } else {
+                std::cmp::Ordering::Less
+            }
+        })
+        .unwrap()
+        .len()
+}
+
+fn get_max_savednetworks(networks: HashMap<String, Network>) -> usize {
+    get_max_len(
+        networks
+            .iter()
+            .map(|(k, v)| v.subtype_1.name.clone().unwrap())
+            .collect::<Vec<String>>(),
+    )
+}
+
 fn display_networks<B: Backend>(f: &mut Frame<'_, B>, app: &mut App) -> Result<(), anyhow::Error> {
     let list = Layout::default()
         .constraints([Constraint::Min(4)])
@@ -153,29 +178,69 @@ fn display_networks<B: Backend>(f: &mut Frame<'_, B>, app: &mut App) -> Result<(
     }
 
     let mut new = false;
+    let mut ids = HashSet::new();
 
     for network in &networks {
-        if !app
-            .savednetworks
-            .contains_key(&network.subtype_1.id.clone().unwrap())
-        {
+        let id = network.subtype_1.id.clone().unwrap();
+
+        ids.insert(id.clone());
+
+        if !app.savednetworks.contains_key(&id) {
             new = true;
         }
 
-        app.savednetworks
-            .insert(network.subtype_1.id.clone().unwrap(), network.clone());
+        app.savednetworks.insert(id, network.clone());
+    }
+
+    for (id, network) in app.savednetworks.iter_mut() {
+        if !app.savednetworksidx.contains(id) {
+            app.savednetworksidx.push(id.clone());
+        }
+
+        if !ids.contains(id) {
+            network.subtype_1.status = Some("DISCONNECTED".to_string());
+        }
     }
 
     app.listitems = app
-        .savednetworks
+        .savednetworksidx
         .iter()
-        .map(|(k, v)| {
+        .map(|k| {
+            let v = app.savednetworks.get(k).unwrap();
             ListItem::new(Spans::from(vec![
                 Span::styled(k.clone(), Style::default().fg(Color::LightCyan)),
                 Span::raw(" "),
                 Span::styled(
-                    v.subtype_1.name.clone().unwrap(),
+                    v.subtype_1.name.clone().unwrap_or_default(),
                     Style::default().fg(Color::Cyan),
+                ),
+                Span::raw(" ".repeat(
+                    1 + get_max_savednetworks(app.savednetworks.clone())
+                        - v.subtype_1.name.clone().unwrap_or_default().len(),
+                )),
+                Span::styled(
+                    v.subtype_1.status.clone().unwrap(),
+                    Style::default().fg(match v.subtype_1.status.clone().unwrap().as_str() {
+                        "OK" => Color::LightGreen,
+                        "REQUESTING_CONFIGURATION" => Color::LightYellow,
+                        "DISCONNECTED" => Color::LightRed,
+                        _ => Color::LightRed,
+                    }),
+                ),
+                Span::raw(
+                    " ".repeat(
+                        1 + get_max_len(
+                            app.savednetworks
+                                .clone()
+                                .iter()
+                                .map(|(k, v)| v.subtype_1.status.clone().unwrap())
+                                .collect::<Vec<String>>(),
+                        ) - v.subtype_1.status.clone().unwrap_or_default().len(),
+                    ),
+                ),
+                Span::styled(
+                    v.subtype_1.assigned_addresses.join(", "),
+                    Style::default().fg(Color::LightGreen),
                 ),
             ]))
         })
@@ -237,11 +302,19 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> std::io::Re
                             app.liststate.select(Some(pos))
                         }
                     }
-                    KeyCode::Char(c) => {
-                        if c == 'q' {
+                    KeyCode::Char(c) => match c {
+                        'q' => {
                             return Ok(());
                         }
-                    }
+                        'd' => {
+                            let pos = app.liststate.selected().unwrap_or_default();
+                            let id = app.savednetworksidx[pos].clone();
+                            app.savednetworksidx =
+                                app.savednetworksidx.splice(pos - 1..pos, []).collect();
+                            app.savednetworks.remove(&id);
+                        }
+                        _ => {}
+                    },
                     _ => {}
                 }
             }
