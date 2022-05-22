@@ -102,12 +102,6 @@ fn draw<B: Backend>(f: &mut Frame<'_, B>, app: &mut App) -> Result<(), anyhow::E
     display_help(f)?;
 
     if let Dialog::Join = app.dialog {
-        let p = Paragraph::new(app.inputbuffer.as_ref()).block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title("] Join a Network ["),
-        );
-
         let (w, _) = crossterm::terminal::size()?;
 
         let layout = Layout::default()
@@ -123,7 +117,18 @@ fn draw<B: Backend>(f: &mut Frame<'_, B>, app: &mut App) -> Result<(), anyhow::E
             )
             .split(f.size());
 
+        let orig_len = app.inputbuffer.len();
+        let len = layout[1].width as usize - app.inputbuffer.len();
+
+        app.inputbuffer += &" ".repeat(len);
+        let p = Paragraph::new(app.inputbuffer.as_ref()).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("] Join a Network ["),
+        );
+
         f.render_widget(p, layout[1]);
+        app.inputbuffer.truncate(orig_len);
     }
 
     Ok(())
