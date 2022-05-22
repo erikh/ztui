@@ -1,12 +1,11 @@
 use std::{
     collections::{HashMap, HashSet},
-    io::BufRead,
     path::Path,
     time::{Duration, Instant},
 };
 
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
+    event::{self, Event, KeyCode},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -14,7 +13,7 @@ use http::{HeaderMap, HeaderValue};
 use tokio::sync::mpsc;
 use tui::{
     backend::{Backend, CrosstermBackend},
-    layout::{Constraint, Layout, Rect},
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Span, Spans},
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap},
@@ -23,7 +22,22 @@ use tui::{
 use zerotier_one_api::types::Network;
 
 #[derive(Debug, Clone)]
+enum EditingMode {
+    Command,
+    Editing,
+}
+
+#[derive(Debug, Clone)]
+enum Dialog {
+    None,
+    Join,
+}
+
+#[derive(Debug, Clone)]
 struct App {
+    editing_mode: EditingMode,
+    dialog: Dialog,
+    inputbuffer: String,
     listitems: Vec<ListItem<'static>>,
     liststate: ListState,
     savednetworks: HashMap<String, Network>,
@@ -34,11 +48,14 @@ struct App {
 async fn main() -> Result<(), anyhow::Error> {
     enable_raw_mode()?;
     let mut stdout = std::io::stdout();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+    execute!(stdout, EnterAlternateScreen)?;
     let backend = CrosstermBackend::new(stdout);
 
     let mut terminal = Terminal::new(backend)?;
     let mut app = App {
+        dialog: Dialog::None,
+        editing_mode: EditingMode::Command,
+        inputbuffer: String::new(),
         savednetworksidx: Vec::new(),
         savednetworks: HashMap::new(),
         listitems: Vec::new(),
@@ -66,11 +83,7 @@ async fn main() -> Result<(), anyhow::Error> {
     )?;
 
     disable_raw_mode()?;
-    execute!(
-        terminal.backend_mut(),
-        LeaveAlternateScreen,
-        DisableMouseCapture
-    )?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen,)?;
     terminal.show_cursor()?;
 
     if let Err(err) = res {
@@ -83,6 +96,32 @@ async fn main() -> Result<(), anyhow::Error> {
 fn draw<B: Backend>(f: &mut Frame<'_, B>, app: &mut App) -> Result<(), anyhow::Error> {
     display_networks(f, app)?;
     display_help(f)?;
+
+    if let Dialog::Join = app.dialog {
+        let p = Paragraph::new(app.inputbuffer.as_ref()).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("] Join a Network ["),
+        );
+
+        let (w, _) = crossterm::terminal::size()?;
+
+        let layout = Layout::default()
+            .direction(Direction::Vertical)
+            .horizontal_margin(w / 2 - 10)
+            .constraints(
+                [
+                    Constraint::Percentage(50),
+                    Constraint::Length(3),
+                    Constraint::Min(1),
+                ]
+                .as_ref(),
+            )
+            .split(f.size());
+
+        f.render_widget(p, layout[1]);
+    }
+
     Ok(())
 }
 
@@ -272,6 +311,7 @@ fn display_help<B: Backend>(f: &mut Frame<B>) -> Result<(), anyhow::Error> {
         "q = Quit",
         "j = Join a bookmarked network",
         "l = Leave a bookmarked network",
+        "J = Join a network by address",
     ];
 
     let mut spans = Vec::new();
@@ -373,49 +413,73 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> std::io::Re
             .unwrap_or_else(|| Duration::from_secs(0));
         if crossterm::event::poll(timeout)? {
             if let Event::Key(key) = event::read()? {
-                match key.code {
-                    KeyCode::Up => {
-                        if let Some(pos) = app.liststate.selected() {
-                            if pos > 0 {
-                                app.liststate.select(Some(pos - 1));
+                match app.editing_mode {
+                    EditingMode::Command => match key.code {
+                        KeyCode::Up => {
+                            if let Some(pos) = app.liststate.selected() {
+                                if pos > 0 {
+                                    app.liststate.select(Some(pos - 1));
+                                }
                             }
                         }
-                    }
-                    KeyCode::Down => {
-                        let pos = app.liststate.selected().unwrap_or_default() + 1;
-                        if pos < app.listitems.len() {
-                            app.liststate.select(Some(pos))
+                        KeyCode::Down => {
+                            let pos = app.liststate.selected().unwrap_or_default() + 1;
+                            if pos < app.listitems.len() {
+                                app.liststate.select(Some(pos))
+                            }
                         }
-                    }
-                    KeyCode::Char(c) => match c {
-                        'q' => {
-                            return Ok(());
+                        KeyCode::Char(c) => match c {
+                            'q' => {
+                                return Ok(());
+                            }
+                            'd' => {
+                                let pos = app.liststate.selected().unwrap_or_default();
+                                let id = app.savednetworksidx[pos].clone();
+                                app.savednetworksidx =
+                                    app.savednetworksidx.splice(pos - 1..pos, []).collect();
+                                app.savednetworks.remove(&id);
+                            }
+                            'l' => {
+                                let pos = app.liststate.selected().unwrap_or_default();
+                                let id = app.savednetworksidx[pos].clone();
+                                tokio::spawn(leave_network(id));
+                            }
+                            'j' => {
+                                let pos = app.liststate.selected().unwrap_or_default();
+                                let id = app.savednetworksidx[pos].clone();
+                                tokio::spawn(join_network(id));
+                            }
+                            'J' => {
+                                app.dialog = Dialog::Join;
+                                app.editing_mode = EditingMode::Editing;
+                            }
+                            _ => {}
+                        },
+                        _ => {}
+                    },
+                    EditingMode::Editing => match key.code {
+                        KeyCode::Char(x) => {
+                            app.inputbuffer.push(x);
                         }
-                        'd' => {
-                            let pos = app.liststate.selected().unwrap_or_default();
-                            let id = app.savednetworksidx[pos].clone();
-                            app.savednetworksidx =
-                                app.savednetworksidx.splice(pos - 1..pos, []).collect();
-                            app.savednetworks.remove(&id);
+                        KeyCode::Esc => {
+                            app.inputbuffer = String::new();
+                            app.dialog = Dialog::None;
+                            app.editing_mode = EditingMode::Command;
                         }
-                        'l' => {
-                            let pos = app.liststate.selected().unwrap_or_default();
-                            let id = app.savednetworksidx[pos].clone();
-                            tokio::spawn(leave_network(id));
+                        KeyCode::Backspace => {
+                            if app.inputbuffer.len() > 0 {
+                                app.inputbuffer
+                                    .drain(app.inputbuffer.len() - 1..app.inputbuffer.len());
+                            }
                         }
-                        'j' => {
-                            let pos = app.liststate.selected().unwrap_or_default();
-                            let id = app.savednetworksidx[pos].clone();
-                            tokio::spawn(join_network(id));
-                        }
-                        'J' => {
-                            let mut network_id = String::new();
-                            std::io::stdin().lock().read_line(&mut network_id)?;
-                            tokio::spawn(join_network(network_id));
+                        KeyCode::Enter => {
+                            tokio::spawn(join_network(app.inputbuffer.clone()));
+                            app.inputbuffer = String::new();
+                            app.dialog = Dialog::None;
+                            app.editing_mode = EditingMode::Command;
                         }
                         _ => {}
                     },
-                    _ => {}
                 }
             }
         }
