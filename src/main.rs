@@ -46,6 +46,10 @@ struct App {
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
+    local_client_from_file(authtoken_path(None)).expect(
+        "must be able to read the authtoken.secret file in the zerotier configuration directory",
+    );
+
     enable_raw_mode()?;
     let mut stdout = std::io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
