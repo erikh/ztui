@@ -99,7 +99,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
 fn display_dialogs<B: Backend>(f: &mut Frame<'_, B>, app: &mut App) -> Result<(), anyhow::Error> {
     if let Dialog::Join = app.dialog {
-        let (w, _) = crossterm::terminal::size()?;
+        let w = f.size().width;
 
         let layout = Layout::default()
             .direction(Direction::Vertical)
@@ -362,7 +362,9 @@ fn display_help<B: Backend>(f: &mut Frame<B>) -> Result<(), anyhow::Error> {
 
     let para = Paragraph::new(spans).block(block).wrap(Wrap { trim: true });
 
-    let (w, h) = crossterm::terminal::size()?;
+    let size = f.size();
+    let w = size.width;
+    let h = size.height;
     let mut rect = Rect::default();
     rect.y = h - 5;
     rect.width = w;
