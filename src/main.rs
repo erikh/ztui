@@ -2,7 +2,7 @@ use std::{
     collections::{HashMap, HashSet},
     io::Write,
     path::Path,
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime},
 };
 
 use bat::{Input, PrettyPrinter};
@@ -45,6 +45,7 @@ struct App {
     liststate: ListState,
     savednetworks: HashMap<String, Network>,
     savednetworksidx: Vec<String>,
+    last_usage: HashMap<String, Vec<(usize, usize, SystemTime)>>,
 }
 
 #[tokio::main]
@@ -65,6 +66,7 @@ async fn main() -> Result<(), anyhow::Error> {
         inputbuffer: String::new(),
         savednetworksidx: Vec::new(),
         savednetworks: HashMap::new(),
+        last_usage: HashMap::new(),
         listitems: Vec::new(),
         liststate: ListState::default(),
     };
@@ -250,6 +252,8 @@ fn display_networks<B: Backend>(f: &mut Frame<'_, B>, app: &mut App) -> Result<(
         app.savednetworks.insert(id, network.clone());
     }
 
+    let nets = sys_metrics::network::get_ionets()?;
+
     for (id, network) in app.savednetworks.iter_mut() {
         if !app.savednetworksidx.contains(id) {
             app.savednetworksidx.push(id.clone());
@@ -257,6 +261,36 @@ fn display_networks<B: Backend>(f: &mut Frame<'_, B>, app: &mut App) -> Result<(
 
         if !ids.contains(id) {
             network.subtype_1.status = Some("DISCONNECTED".to_string());
+            continue;
+        }
+
+        for net in &nets {
+            if network.subtype_1.port_device_name.clone().unwrap() == net.interface {
+                if let Some(v) = app.last_usage.get_mut(&net.interface) {
+                    v.push((
+                        net.rx_bytes as usize,
+                        net.tx_bytes as usize,
+                        SystemTime::now(),
+                    ));
+                    if v.len() > 2 {
+                        let v2 =
+                            v.iter()
+                                .skip(v.len() - 2)
+                                .map(|k| *k)
+                                .collect::<Vec<(usize, usize, SystemTime)>>();
+                        app.last_usage.insert(net.interface.clone(), v2);
+                    }
+                } else {
+                    app.last_usage.insert(
+                        net.interface.clone(),
+                        vec![(
+                            net.rx_bytes as usize,
+                            net.tx_bytes as usize,
+                            SystemTime::now(),
+                        )],
+                    );
+                }
+            }
         }
     }
 
@@ -299,6 +333,45 @@ fn display_networks<B: Backend>(f: &mut Frame<'_, B>, app: &mut App) -> Result<(
                 Span::styled(
                     v.subtype_1.assigned_addresses.join(", "),
                     Style::default().fg(Color::LightGreen),
+                ),
+                Span::raw(
+                    " ".repeat(
+                        1 + get_max_len(
+                            app.savednetworks
+                                .clone()
+                                .iter()
+                                .map(|(_, v)| v.subtype_1.assigned_addresses.join(", "))
+                                .collect::<Vec<String>>(),
+                        ) - v.subtype_1.assigned_addresses.join(", ").len(),
+                    ),
+                ),
+                Span::styled(
+                    if let Some(s) = app
+                        .last_usage
+                        .get_mut(&v.subtype_1.port_device_name.clone().unwrap())
+                    {
+                        if s.len() < 2 {
+                            "".to_string()
+                        } else {
+                            let len = s.len();
+                            let mut i = s.iter();
+                            let first = i.nth(len - 2).unwrap();
+                            let mut i = s.iter();
+                            let second = i.nth(len - 1).unwrap();
+                            format!(
+                                "Rx: {} | Tx: {}",
+                                byte_unit::Byte::from_bytes(second.0 as u128 - first.0 as u128)
+                                    .get_appropriate_unit(true)
+                                    .to_string(),
+                                byte_unit::Byte::from_bytes(second.1 as u128 - first.1 as u128)
+                                    .get_appropriate_unit(true)
+                                    .to_string(),
+                            )
+                        }
+                    } else {
+                        "".to_string()
+                    },
+                    Style::default().fg(Color::LightMagenta),
                 ),
             ]))
         })

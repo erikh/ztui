@@ -144,6 +144,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4a45a46ab1f2412e53d3a0ade76ffad2025804294569aae387231a0cd6e0899"
 
 [[package]]
+name = "byte-unit"
+version = "4.0.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "95ebf10dda65f19ff0f42ea15572a359ed60d7fc74fdc984d90310937be0014b"
+dependencies = [
+ "utf8-width",
+]
+
+[[package]]
 name = "bytemuck"
 version = "1.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -254,9 +263,15 @@ version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "194a7a9e6de53fa55116934067c844d9d749312f75c6f6d0980e8c252f8c2146"
 dependencies = [
- "core-foundation-sys",
+ "core-foundation-sys 0.8.3",
  "libc",
 ]
+
+[[package]]
+name = "core-foundation-sys"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e7ca8a5221364ef15ce201e8ed2f609fc312682a8f4e0e3d4aa5879764e0fa3b"
 
 [[package]]
 name = "core-foundation-sys"
@@ -808,6 +823,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "io-kit-sys"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f21dcc74995dd4cd090b147e79789f8d65959cbfb5f0b118002db869ea3bd0a0"
+dependencies = [
+ "core-foundation-sys 0.6.2",
+ "mach 0.2.3",
+]
+
+[[package]]
 name = "ipnet"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -905,6 +930,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "abb12e687cfb44aa40f41fc3978ef76448f9b6038cad6aef4259d3c095a2382e"
 dependencies = [
  "cfg-if",
+]
+
+[[package]]
+name = "mach"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "86dd2487cdfea56def77b88438a2c915fb45113c5319bfe7e14306ca4cd0b0e1"
+dependencies = [
+ "libc",
+]
+
+[[package]]
+name = "mach"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b823e83b2affd8f40a9ee8c29dbc56404c1e34cd2710921f2801e2cf29527afa"
+dependencies = [
+ "libc",
 ]
 
 [[package]]
@@ -1438,7 +1481,7 @@ checksum = "2dc14f172faf8a0194a3aded622712b0de276821addc574fa54fc0a1167e10dc"
 dependencies = [
  "bitflags",
  "core-foundation",
- "core-foundation-sys",
+ "core-foundation-sys 0.8.3",
  "libc",
  "security-framework-sys",
 ]
@@ -1449,7 +1492,7 @@ version = "2.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0160a13a177a45bfb43ce71c01580998474f556ad854dcbca936dd2841a5c556"
 dependencies = [
- "core-foundation-sys",
+ "core-foundation-sys 0.8.3",
  "libc",
 ]
 
@@ -1672,6 +1715,21 @@ checksum = "0b3a0d0aba8bf96a0e1ddfdc352fc53b3df7f39318c71854910c3c4b024ae52c"
 dependencies = [
  "cc",
  "libc",
+]
+
+[[package]]
+name = "sys_metrics"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b5890139b35e79b4cca0aab0c04f2b6693649e11cfbe6103cb368198d30c325"
+dependencies = [
+ "core-foundation-sys 0.8.3",
+ "glob",
+ "io-kit-sys",
+ "lazy_static",
+ "libc",
+ "mach 0.3.2",
+ "serde",
 ]
 
 [[package]]
@@ -2024,6 +2082,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "utf8-width"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5190c9442dcdaf0ddd50f37420417d219ae5261bbf5db120d0f9bab996c9cba1"
+
+[[package]]
 name = "uuid"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2284,12 +2348,14 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bat",
+ "byte-unit",
  "crossterm",
  "directories",
  "http",
  "reqwest",
  "serde",
  "serde_json",
+ "sys_metrics",
  "tokio",
  "tui",
  "zerotier-one-api",
