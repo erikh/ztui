@@ -1,9 +1,11 @@
 use std::{
     collections::{HashMap, HashSet},
+    io::Write,
     path::Path,
     time::{Duration, Instant},
 };
 
+use bat::{Input, PrettyPrinter};
 use crossterm::{
     event::{self, Event, KeyCode},
     execute,
@@ -31,6 +33,7 @@ enum EditingMode {
 enum Dialog {
     None,
     Join,
+    Config,
 }
 
 #[derive(Debug, Clone)]
@@ -87,7 +90,7 @@ async fn main() -> Result<(), anyhow::Error> {
     )?;
 
     disable_raw_mode()?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen,)?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
     terminal.show_cursor()?;
 
     if let Err(err) = res {
@@ -305,6 +308,10 @@ fn display_networks<B: Backend>(f: &mut Frame<'_, B>, app: &mut App) -> Result<(
         app.liststate = ListState::default();
     }
 
+    if app.liststate.selected().is_none() && app.listitems.len() > 0 {
+        app.liststate.select(Some(0));
+    }
+
     let listview = List::new(app.listitems.clone())
         .block(titleblock)
         .highlight_style(Style::default().add_modifier(Modifier::BOLD))
@@ -326,6 +333,7 @@ fn display_help<B: Backend>(f: &mut Frame<B>) -> Result<(), anyhow::Error> {
         "j = Join a bookmarked network",
         "l = Leave a bookmarked network",
         "J = Join a network by address",
+        "c = review network config",
     ];
 
     let mut spans = Vec::new();
@@ -417,8 +425,28 @@ async fn join_network(network_id: String) -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> std::io::Result<()> {
+fn run_app<W: Write>(
+    terminal: &mut Terminal<CrosstermBackend<W>>,
+    app: &mut App,
+) -> std::io::Result<()> {
     loop {
+        if let Dialog::Config = app.dialog {
+            disable_raw_mode()?;
+            execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+            terminal.show_cursor()?;
+            PrettyPrinter::new()
+                .input(Input::from_bytes(app.inputbuffer.as_bytes()).name("config.json"))
+                .paging_mode(bat::PagingMode::Always)
+                .print()
+                .expect("could not print");
+
+            enable_raw_mode()?;
+            execute!(terminal.backend_mut(), EnterAlternateScreen)?;
+            terminal.hide_cursor()?;
+            terminal.clear()?;
+            app.dialog = Dialog::None;
+        }
+
         let last_tick = Instant::now();
         terminal.draw(|f| {
             draw(f, app).unwrap();
@@ -444,6 +472,10 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> std::io::Re
                                 app.liststate.select(Some(pos))
                             }
                         }
+                        KeyCode::Esc => {
+                            app.dialog = Dialog::None;
+                            app.editing_mode = EditingMode::Command;
+                        }
                         KeyCode::Char(c) => match c {
                             'q' => {
                                 return Ok(());
@@ -468,6 +500,14 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> std::io::Re
                             'J' => {
                                 app.dialog = Dialog::Join;
                                 app.editing_mode = EditingMode::Editing;
+                            }
+                            'c' => {
+                                app.inputbuffer =
+                                    serde_json::to_string_pretty(&app.savednetworks.get(
+                                        &app.savednetworksidx
+                                            [app.liststate.selected().unwrap_or_default()],
+                                    ))?;
+                                app.dialog = Dialog::Config;
                             }
                             _ => {}
                         },
