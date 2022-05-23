@@ -97,10 +97,7 @@ async fn main() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-fn draw<B: Backend>(f: &mut Frame<'_, B>, app: &mut App) -> Result<(), anyhow::Error> {
-    display_networks(f, app)?;
-    display_help(f)?;
-
+fn display_dialogs<B: Backend>(f: &mut Frame<'_, B>, app: &mut App) -> Result<(), anyhow::Error> {
     if let Dialog::Join = app.dialog {
         let (w, _) = crossterm::terminal::size()?;
 
@@ -130,6 +127,14 @@ fn draw<B: Backend>(f: &mut Frame<'_, B>, app: &mut App) -> Result<(), anyhow::E
         f.render_widget(p, layout[1]);
         app.inputbuffer.truncate(orig_len);
     }
+
+    Ok(())
+}
+
+fn draw<B: Backend>(f: &mut Frame<'_, B>, app: &mut App) -> Result<(), anyhow::Error> {
+    display_networks(f, app)?;
+    display_help(f)?;
+    display_dialogs(f, app)?;
 
     Ok(())
 }
