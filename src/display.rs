@@ -134,8 +134,6 @@ pub fn display_networks<B: Backend>(
         app.savednetworks.insert(id, network.clone());
     }
 
-    let nets = sys_metrics::network::get_ionets()?;
-
     for (id, network) in app.savednetworks.iter_mut() {
         if !app.savednetworksidx.contains(id) {
             app.savednetworksidx.push(id.clone());
@@ -146,24 +144,25 @@ pub fn display_networks<B: Backend>(
             continue;
         }
 
-        for net in &nets {
-            if network.subtype_1.port_device_name.clone().unwrap() == net.interface {
-                if let Some(v) = app.last_usage.get_mut(&net.interface) {
-                    v.push((net.rx_bytes as u128, net.tx_bytes as u128, Instant::now()));
-                    if v.len() > 2 {
-                        let v2 = v
-                            .iter()
-                            .skip(v.len() - 3)
-                            .map(|k| *k)
-                            .collect::<Vec<(u128, u128, Instant)>>();
-                        app.last_usage.insert(net.interface.clone(), v2);
-                    }
-                } else {
-                    app.last_usage.insert(
-                        net.interface.clone(),
-                        vec![(net.rx_bytes as u128, net.tx_bytes as u128, Instant::now())],
-                    );
+        if let Some(net) = app
+            .nets
+            .find_by_interface(network.subtype_1.port_device_name.clone().unwrap())
+        {
+            if let Some(v) = app.last_usage.get_mut(&net.interface) {
+                v.push((net.rx_bytes as u128, net.tx_bytes as u128, Instant::now()));
+                if v.len() > 2 {
+                    let v2 = v
+                        .iter()
+                        .skip(v.len() - 3)
+                        .map(|k| *k)
+                        .collect::<Vec<(u128, u128, Instant)>>();
+                    app.last_usage.insert(net.interface.clone(), v2);
                 }
+            } else {
+                app.last_usage.insert(
+                    net.interface.clone(),
+                    vec![(net.rx_bytes as u128, net.tx_bytes as u128, Instant::now())],
+                );
             }
         }
     }

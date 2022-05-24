@@ -17,6 +17,8 @@ use tui::{
 };
 use zerotier_one_api::types::Network;
 
+use crate::nets::Nets;
+
 pub const STATUS_DISCONNECTED: &str = "DISCONNECTED";
 
 #[derive(Debug, Clone)]
@@ -49,11 +51,13 @@ pub struct App {
     pub savednetworks: HashMap<String, Network>,
     pub savednetworksidx: Vec<String>,
     pub last_usage: HashMap<String, Vec<(u128, u128, Instant)>>,
+    pub nets: Nets,
 }
 
 impl Default for App {
     fn default() -> Self {
         Self {
+            nets: Nets::new().unwrap(),
             dialog: Dialog::None,
             filter: ListFilter::None,
             editing_mode: EditingMode::Command,
@@ -75,6 +79,8 @@ impl App {
         terminal.clear()?;
         loop {
             let networks = crate::client::sync_get_networks()?;
+            self.nets.refresh()?;
+
             if let Dialog::Config = self.dialog {
                 disable_raw_mode()?;
                 execute!(terminal.backend_mut(), LeaveAlternateScreen)?;

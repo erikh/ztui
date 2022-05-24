@@ -9,6 +9,7 @@ use tui::{backend::CrosstermBackend, Terminal};
 mod app;
 mod client;
 mod display;
+mod nets;
 
 fn home_dir() -> PathBuf {
     directories::UserDirs::new()
