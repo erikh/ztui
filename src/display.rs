@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    time::Instant,
-};
+use std::{collections::HashSet, time::Instant};
 
 use tui::{
     backend::Backend,
@@ -13,12 +10,18 @@ use tui::{
 };
 use zerotier_one_api::types::Network;
 
-use crate::app::{self, Dialog};
+use crate::app::{self, Dialog, ListFilter};
 
 macro_rules! get_space_offset {
     ($mapped:expr, $var:expr, $map:block) => {
         " ".repeat(
-            1 + get_max_len($mapped.clone().iter().map($map).collect::<Vec<String>>()) - $var.len(),
+            1 + get_max_len(
+                $mapped
+                    .clone()
+                    .iter()
+                    .filter_map($map)
+                    .collect::<Vec<String>>(),
+            ) - $var.len(),
         )
     };
 }
@@ -36,10 +39,21 @@ fn get_max_len(strs: Vec<String>) -> usize {
         .len()
 }
 
-fn get_max_savednetworks(networks: HashMap<String, Network>) -> usize {
-    let names = networks
+fn get_max_savednetworks(app: crate::app::App) -> usize {
+    let names = app
+        .savednetworks
         .iter()
-        .map(|(_, v)| v.subtype_1.name.clone().unwrap())
+        .filter_map(|(_, v)| {
+            if let ListFilter::Connected = app.filter {
+                if v.subtype_1.status.clone().unwrap() != "DISCONNECTED" {
+                    Some(v.subtype_1.name.clone().unwrap())
+                } else {
+                    None
+                }
+            } else {
+                Some(v.subtype_1.name.clone().unwrap())
+            }
+        })
         .collect::<Vec<String>>();
 
     get_max_len(names)
@@ -169,7 +183,7 @@ pub fn display_networks<B: Backend>(
                     Style::default().fg(Color::Cyan),
                 ),
                 Span::raw(" ".repeat(
-                    1 + get_max_savednetworks(app.savednetworks.clone())
+                    1 + get_max_savednetworks(app.clone())
                         - v.subtype_1.name.clone().unwrap_or_default().len(),
                 )),
                 Span::styled(
@@ -184,7 +198,19 @@ pub fn display_networks<B: Backend>(
                 Span::raw(get_space_offset!(
                     app.savednetworks,
                     v.subtype_1.status.clone().unwrap_or_default(),
-                    { |(_, v2)| v2.subtype_1.status.clone().unwrap_or_default() }
+                    {
+                        |(_, v2)| {
+                            if let ListFilter::Connected = app.filter {
+                                if v2.subtype_1.status.clone().unwrap() == "DISCONNECTED" {
+                                    None
+                                } else {
+                                    Some(v2.subtype_1.status.clone().unwrap_or_default())
+                                }
+                            } else {
+                                Some(v2.subtype_1.status.clone().unwrap_or_default())
+                            }
+                        }
+                    }
                 )),
                 Span::styled(
                     v.subtype_1.assigned_addresses.join(", "),
@@ -193,10 +219,11 @@ pub fn display_networks<B: Backend>(
                 Span::raw(get_space_offset!(
                     app.savednetworks,
                     v.subtype_1.assigned_addresses.join(", "),
-                    { |(_, v2)| v2.subtype_1.assigned_addresses.join(", ") }
+                    { |(_, v2)| Some(v2.subtype_1.assigned_addresses.join(", ")) }
                 )),
                 Span::styled(
                     if let Some(s) = app
+                        .clone()
                         .last_usage
                         .get_mut(&v.subtype_1.port_device_name.clone().unwrap())
                     {
