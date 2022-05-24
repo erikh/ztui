@@ -15,6 +15,14 @@ use zerotier_one_api::types::Network;
 
 use crate::app::{self, Dialog};
 
+macro_rules! get_space_offset {
+    ($mapped:expr, $var:expr, $map:block) => {
+        " ".repeat(
+            1 + get_max_len($mapped.clone().iter().map($map).collect::<Vec<String>>()) - $var.len(),
+        )
+    };
+}
+
 fn get_max_len(strs: Vec<String>) -> usize {
     strs.iter()
         .max_by(|k, k2| {
@@ -173,32 +181,20 @@ pub fn display_networks<B: Backend>(
                         _ => Color::LightRed,
                     }),
                 ),
-                Span::raw(
-                    " ".repeat(
-                        1 + get_max_len(
-                            app.savednetworks
-                                .clone()
-                                .iter()
-                                .map(|(_, v)| v.subtype_1.status.clone().unwrap())
-                                .collect::<Vec<String>>(),
-                        ) - v.subtype_1.status.clone().unwrap_or_default().len(),
-                    ),
-                ),
+                Span::raw(get_space_offset!(
+                    app.savednetworks,
+                    v.subtype_1.status.clone().unwrap_or_default(),
+                    { |(_, v2)| v2.subtype_1.status.clone().unwrap_or_default() }
+                )),
                 Span::styled(
                     v.subtype_1.assigned_addresses.join(", "),
                     Style::default().fg(Color::LightGreen),
                 ),
-                Span::raw(
-                    " ".repeat(
-                        1 + get_max_len(
-                            app.savednetworks
-                                .clone()
-                                .iter()
-                                .map(|(_, v)| v.subtype_1.assigned_addresses.join(", "))
-                                .collect::<Vec<String>>(),
-                        ) - v.subtype_1.assigned_addresses.join(", ").len(),
-                    ),
-                ),
+                Span::raw(get_space_offset!(
+                    app.savednetworks,
+                    v.subtype_1.assigned_addresses.join(", "),
+                    { |(_, v2)| v2.subtype_1.assigned_addresses.join(", ") }
+                )),
                 Span::styled(
                     if let Some(s) = app
                         .last_usage
