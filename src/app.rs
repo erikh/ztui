@@ -69,8 +69,9 @@ impl App {
     pub fn run<W: Write>(
         &mut self,
         terminal: &mut Terminal<CrosstermBackend<W>>,
-    ) -> std::io::Result<()> {
+    ) -> Result<(), anyhow::Error> {
         loop {
+            let networks = crate::client::sync_get_networks()?;
             if let Dialog::Config = self.dialog {
                 disable_raw_mode()?;
                 execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
@@ -90,7 +91,7 @@ impl App {
 
             let last_tick = Instant::now();
             terminal.draw(|f| {
-                self.draw(f).unwrap();
+                self.draw(f, networks).unwrap();
             })?;
 
             let timeout = Duration::new(1, 0)
@@ -104,8 +105,12 @@ impl App {
         }
     }
 
-    fn draw<B: Backend>(&mut self, f: &mut Frame<'_, B>) -> Result<(), anyhow::Error> {
-        crate::display::display_networks(f, self)?;
+    fn draw<B: Backend>(
+        &mut self,
+        f: &mut Frame<'_, B>,
+        networks: Vec<Network>,
+    ) -> Result<(), anyhow::Error> {
+        crate::display::display_networks(f, self, networks)?;
         crate::display::display_help(f)?;
         crate::display::display_dialogs(f, self)?;
 

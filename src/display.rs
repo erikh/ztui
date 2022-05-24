@@ -82,6 +82,7 @@ pub fn display_dialogs<B: Backend>(
 pub fn display_networks<B: Backend>(
     f: &mut Frame<'_, B>,
     app: &mut crate::app::App,
+    networks: Vec<Network>,
 ) -> Result<(), anyhow::Error> {
     let list = Layout::default()
         .constraints([Constraint::Min(4)])
@@ -93,8 +94,6 @@ pub fn display_networks<B: Backend>(
 
     let mut new = false;
     let mut ids = HashSet::new();
-
-    let networks = crate::client::sync_get_networks()?;
 
     for network in &networks {
         let id = network.subtype_1.id.clone().unwrap();

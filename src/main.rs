@@ -35,6 +35,8 @@ async fn main() -> Result<(), anyhow::Error> {
     app.savednetworks = serde_json::from_str(&networks_file)?;
 
     terminal.clear()?;
+    eprintln!("Polling ZeroTier for network information...");
+
     let res = app.run(&mut terminal);
 
     std::fs::write(

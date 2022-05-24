@@ -1,5 +1,9 @@
-use std::{path::Path, time::Duration};
+use std::{
+    path::Path,
+    time::{Duration, Instant},
+};
 
+use anyhow::anyhow;
 use http::{HeaderMap, HeaderValue};
 use tokio::sync::mpsc;
 use zerotier_one_api::types::Network;
@@ -99,6 +103,8 @@ pub fn sync_get_networks() -> Result<Vec<Network>, anyhow::Error> {
 
     let networks: Vec<Network>;
 
+    let timeout = Instant::now();
+
     'outer: loop {
         match r.try_recv() {
             Ok(n) => {
@@ -107,6 +113,10 @@ pub fn sync_get_networks() -> Result<Vec<Network>, anyhow::Error> {
             }
 
             Err(_) => std::thread::sleep(Duration::new(0, 10)),
+        }
+
+        if timeout.elapsed() > Duration::new(3, 0) {
+            return Err(anyhow!("timeout reading from zerotier"));
         }
     }
 
