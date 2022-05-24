@@ -10,7 +10,7 @@ use tui::{
 };
 use zerotier_one_api::types::Network;
 
-use crate::app::{self, Dialog, ListFilter};
+use crate::app::{App, Dialog, ListFilter, STATUS_DISCONNECTED};
 
 macro_rules! get_space_offset {
     ($mapped:expr, $var:expr, $map:block) => {
@@ -39,13 +39,13 @@ fn get_max_len(strs: Vec<String>) -> usize {
         .len()
 }
 
-fn get_max_savednetworks(app: crate::app::App) -> usize {
+fn get_max_savednetworks(app: App) -> usize {
     let names = app
         .savednetworks
         .iter()
         .filter_map(|(_, v)| {
             if let ListFilter::Connected = app.filter {
-                if v.subtype_1.status.clone().unwrap() != "DISCONNECTED" {
+                if v.subtype_1.status.clone().unwrap() != STATUS_DISCONNECTED {
                     Some(v.subtype_1.name.clone().unwrap())
                 } else {
                     None
@@ -59,7 +59,7 @@ fn get_max_savednetworks(app: crate::app::App) -> usize {
     get_max_len(names)
 }
 
-fn dialog_join<B: Backend>(f: &mut Frame<B>, app: &mut app::App) {
+fn dialog_join<B: Backend>(f: &mut Frame<B>, app: &mut App) {
     let w = f.size().width;
 
     let layout = Layout::default()
@@ -91,7 +91,7 @@ fn dialog_join<B: Backend>(f: &mut Frame<B>, app: &mut app::App) {
 
 pub fn display_dialogs<B: Backend>(
     f: &mut Frame<'_, B>,
-    app: &mut crate::app::App,
+    app: &mut App,
 ) -> Result<(), anyhow::Error> {
     match app.dialog {
         Dialog::Join => dialog_join(f, app),
@@ -103,7 +103,7 @@ pub fn display_dialogs<B: Backend>(
 
 pub fn display_networks<B: Backend>(
     f: &mut Frame<'_, B>,
-    app: &mut crate::app::App,
+    app: &mut App,
     networks: Vec<Network>,
 ) -> Result<(), anyhow::Error> {
     let list = Layout::default()
@@ -137,7 +137,7 @@ pub fn display_networks<B: Backend>(
         }
 
         if !ids.contains(id) {
-            network.subtype_1.status = Some("DISCONNECTED".to_string());
+            network.subtype_1.status = Some(STATUS_DISCONNECTED.to_string());
             continue;
         }
 
@@ -169,8 +169,8 @@ pub fn display_networks<B: Backend>(
         .filter_map(|k| {
             let v = app.savednetworks.get(k).unwrap();
 
-            if let app::ListFilter::Connected = app.filter {
-                if v.subtype_1.status.clone().unwrap() == "DISCONNECTED" {
+            if let ListFilter::Connected = app.filter {
+                if v.subtype_1.status.clone().unwrap() == STATUS_DISCONNECTED {
                     return None;
                 }
             }
@@ -191,7 +191,7 @@ pub fn display_networks<B: Backend>(
                     Style::default().fg(match v.subtype_1.status.clone().unwrap().as_str() {
                         "OK" => Color::LightGreen,
                         "REQUESTING_CONFIGURATION" => Color::LightYellow,
-                        "DISCONNECTED" => Color::LightRed,
+                        STATUS_DISCONNECTED => Color::LightRed,
                         _ => Color::LightRed,
                     }),
                 ),
@@ -201,7 +201,7 @@ pub fn display_networks<B: Backend>(
                     {
                         |(_, v2)| {
                             if let ListFilter::Connected = app.filter {
-                                if v2.subtype_1.status.clone().unwrap() == "DISCONNECTED" {
+                                if v2.subtype_1.status.clone().unwrap() == STATUS_DISCONNECTED {
                                     None
                                 } else {
                                     Some(v2.subtype_1.status.clone().unwrap_or_default())

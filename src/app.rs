@@ -17,6 +17,8 @@ use tui::{
 };
 use zerotier_one_api::types::Network;
 
+pub const STATUS_DISCONNECTED: &str = "DISCONNECTED";
+
 #[derive(Debug, Clone)]
 pub enum EditingMode {
     Command,
