@@ -1,18 +1,10 @@
-use std::{
-    io::Write,
-    path::PathBuf,
-    time::{Duration, Instant},
-};
+use std::path::PathBuf;
 
-use bat::{Input, PrettyPrinter};
 use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use tui::{
-    backend::{Backend, CrosstermBackend},
-    Frame, Terminal,
-};
+use tui::{backend::CrosstermBackend, Terminal};
 
 mod app;
 mod client;
@@ -43,7 +35,7 @@ async fn main() -> Result<(), anyhow::Error> {
     app.savednetworks = serde_json::from_str(&networks_file)?;
 
     terminal.clear()?;
-    let res = run_app(&mut terminal, &mut app);
+    let res = app.run(&mut terminal);
 
     std::fs::write(
         home_dir(),
@@ -59,50 +51,4 @@ async fn main() -> Result<(), anyhow::Error> {
     }
 
     Ok(())
-}
-
-fn draw<B: Backend>(f: &mut Frame<'_, B>, app: &mut app::App) -> Result<(), anyhow::Error> {
-    display::display_networks(f, app)?;
-    display::display_help(f)?;
-    display::display_dialogs(f, app)?;
-
-    Ok(())
-}
-
-fn run_app<W: Write>(
-    terminal: &mut Terminal<CrosstermBackend<W>>,
-    app: &mut app::App,
-) -> std::io::Result<()> {
-    loop {
-        if let app::Dialog::Config = app.dialog {
-            disable_raw_mode()?;
-            execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
-            terminal.show_cursor()?;
-            PrettyPrinter::new()
-                .input(Input::from_bytes(app.inputbuffer.as_bytes()).name("config.json"))
-                .paging_mode(bat::PagingMode::Always)
-                .print()
-                .expect("could not print");
-
-            enable_raw_mode()?;
-            execute!(terminal.backend_mut(), EnterAlternateScreen)?;
-            terminal.hide_cursor()?;
-            terminal.clear()?;
-            app.dialog = app::Dialog::None;
-        }
-
-        let last_tick = Instant::now();
-        terminal.draw(|f| {
-            draw(f, app).unwrap();
-        })?;
-
-        let timeout = Duration::new(1, 0)
-            .checked_sub(last_tick.elapsed())
-            .unwrap_or_else(|| Duration::from_secs(0));
-        if crossterm::event::poll(timeout)? {
-            if app.read_key()? {
-                return Ok(());
-            }
-        }
-    }
 }

@@ -1,7 +1,20 @@
-use std::{collections::HashMap, time::Instant};
+use std::{
+    collections::HashMap,
+    io::Write,
+    time::{Duration, Instant},
+};
 
-use crossterm::event::{self, Event, KeyCode};
-use tui::widgets::{ListItem, ListState};
+use bat::{Input, PrettyPrinter};
+use crossterm::{
+    event::{self, Event, KeyCode},
+    execute,
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+};
+use tui::{
+    backend::{Backend, CrosstermBackend},
+    widgets::{ListItem, ListState},
+    Frame, Terminal,
+};
 use zerotier_one_api::types::Network;
 
 #[derive(Debug, Clone)]
@@ -45,6 +58,52 @@ impl Default for App {
 }
 
 impl App {
+    pub fn run<W: Write>(
+        &mut self,
+        terminal: &mut Terminal<CrosstermBackend<W>>,
+    ) -> std::io::Result<()> {
+        loop {
+            if let Dialog::Config = self.dialog {
+                disable_raw_mode()?;
+                execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+                terminal.show_cursor()?;
+                PrettyPrinter::new()
+                    .input(Input::from_bytes(self.inputbuffer.as_bytes()).name("config.json"))
+                    .paging_mode(bat::PagingMode::Always)
+                    .print()
+                    .expect("could not print");
+
+                enable_raw_mode()?;
+                execute!(terminal.backend_mut(), EnterAlternateScreen)?;
+                terminal.hide_cursor()?;
+                terminal.clear()?;
+                self.dialog = Dialog::None;
+            }
+
+            let last_tick = Instant::now();
+            terminal.draw(|f| {
+                self.draw(f).unwrap();
+            })?;
+
+            let timeout = Duration::new(1, 0)
+                .checked_sub(last_tick.elapsed())
+                .unwrap_or_else(|| Duration::from_secs(0));
+            if crossterm::event::poll(timeout)? {
+                if self.read_key()? {
+                    return Ok(());
+                }
+            }
+        }
+    }
+
+    fn draw<B: Backend>(&mut self, f: &mut Frame<'_, B>) -> Result<(), anyhow::Error> {
+        crate::display::display_networks(f, self)?;
+        crate::display::display_help(f)?;
+        crate::display::display_dialogs(f, self)?;
+
+        Ok(())
+    }
+
     pub fn read_key(&mut self) -> std::io::Result<bool> {
         if let Event::Key(key) = event::read()? {
             match self.editing_mode {
