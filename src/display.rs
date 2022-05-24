@@ -12,6 +12,25 @@ use zerotier_one_api::types::Network;
 
 use crate::app::{App, Dialog, ListFilter, STATUS_DISCONNECTED};
 
+macro_rules! filter_disconnected {
+    ($app:expr, $val:block) => {
+        $app.savednetworks
+            .iter()
+            .filter_map(|(_, v)| {
+                if let ListFilter::Connected = $app.filter {
+                    if v.subtype_1.status.clone().unwrap() != STATUS_DISCONNECTED {
+                        Some($val(v))
+                    } else {
+                        None
+                    }
+                } else {
+                    Some($val(v))
+                }
+            })
+            .collect::<Vec<String>>()
+    };
+}
+
 macro_rules! get_space_offset {
     ($mapped:expr, $var:expr, $map:block) => {
         " ".repeat(
@@ -40,23 +59,9 @@ fn get_max_len(strs: Vec<String>) -> usize {
 }
 
 fn get_max_savednetworks(app: App) -> usize {
-    let names = app
-        .savednetworks
-        .iter()
-        .filter_map(|(_, v)| {
-            if let ListFilter::Connected = app.filter {
-                if v.subtype_1.status.clone().unwrap() != STATUS_DISCONNECTED {
-                    Some(v.subtype_1.name.clone().unwrap())
-                } else {
-                    None
-                }
-            } else {
-                Some(v.subtype_1.name.clone().unwrap())
-            }
-        })
-        .collect::<Vec<String>>();
-
-    get_max_len(names)
+    get_max_len(filter_disconnected!(app, {
+        |v: &Network| v.subtype_1.name.clone().unwrap()
+    }))
 }
 
 fn dialog_join<B: Backend>(f: &mut Frame<B>, app: &mut App) {
@@ -302,24 +307,23 @@ pub fn display_help<B: Backend>(f: &mut Frame<B>) -> Result<(), anyhow::Error> {
         if help_text.len() < x {
             break;
         }
-        let mut three = Vec::new();
-        for i in 0..3 {
+        let mut items = Vec::new();
+        for i in 0..help_text.len() / 2 {
             if help_text.len() <= i + x {
                 break;
             }
-            three.push(help_text[i + x]);
+            items.push(help_text[i + x]);
         }
         x += 3;
         let mut s = Vec::new();
         let mut y = 0;
-        for t in &three {
+        for t in &items {
             y += 1;
             s.push(Span::from(t.to_string()));
-            if y < 3 {
-                s.push(Span::raw(" ".repeat(
-                    1 + get_max_len(ht2.iter().map(|s| s.to_string()).collect::<Vec<String>>())
-                        - t.len(),
-                )));
+            if y < help_text.len() / 2 {
+                s.push(Span::raw(get_space_offset!(ht2, t, {
+                    |s| Some(s.to_string())
+                })));
             }
         }
 

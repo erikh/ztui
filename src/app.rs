@@ -72,6 +72,7 @@ impl App {
         &mut self,
         terminal: &mut Terminal<CrosstermBackend<W>>,
     ) -> Result<(), anyhow::Error> {
+        terminal.clear()?;
         loop {
             let networks = crate::client::sync_get_networks()?;
             if let Dialog::Config = self.dialog {
