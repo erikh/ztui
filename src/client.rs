@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{path::Path, time::Duration};
 
 use http::{HeaderMap, HeaderValue};
 use tokio::sync::mpsc;
@@ -90,4 +90,25 @@ pub async fn join_network(network_id: String) -> Result<(), anyhow::Error> {
         )
         .await?;
     Ok(())
+}
+
+pub fn sync_get_networks() -> Result<Vec<Network>, anyhow::Error> {
+    let (s, mut r) = mpsc::unbounded_channel();
+
+    tokio::spawn(crate::client::get_networks(s));
+
+    let networks: Vec<Network>;
+
+    'outer: loop {
+        match r.try_recv() {
+            Ok(n) => {
+                networks = n;
+                break 'outer;
+            }
+
+            Err(_) => std::thread::sleep(Duration::new(0, 10)),
+        }
+    }
+
+    Ok(networks)
 }

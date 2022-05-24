@@ -1,9 +1,8 @@
 use std::{
     collections::{HashMap, HashSet},
-    time::{Duration, Instant},
+    time::Instant,
 };
 
-use tokio::sync::mpsc;
 use tui::{
     backend::Backend,
     layout::{Constraint, Layout, Rect},
@@ -88,25 +87,10 @@ pub fn display_networks<B: Backend>(
         .borders(Borders::TOP | Borders::LEFT | Borders::RIGHT)
         .title("[ ZeroTier Terminal UI ]");
 
-    let (s, mut r) = mpsc::unbounded_channel();
-
-    tokio::spawn(crate::client::get_networks(s));
-
-    let networks: Vec<Network>;
-
-    'outer: loop {
-        match r.try_recv() {
-            Ok(n) => {
-                networks = n;
-                break 'outer;
-            }
-
-            Err(_) => std::thread::sleep(Duration::new(0, 10)),
-        }
-    }
-
     let mut new = false;
     let mut ids = HashSet::new();
+
+    let networks = crate::client::sync_get_networks()?;
 
     for network in &networks {
         let id = network.subtype_1.id.clone().unwrap();
