@@ -6,7 +6,6 @@ use std::{
 
 use bat::{Input, PrettyPrinter};
 use crossterm::{
-    event::{self, Event, KeyCode},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -101,91 +100,9 @@ fn run_app<W: Write>(
             .checked_sub(last_tick.elapsed())
             .unwrap_or_else(|| Duration::from_secs(0));
         if crossterm::event::poll(timeout)? {
-            if read_key(app)? {
+            if app.read_key()? {
                 return Ok(());
             }
         }
     }
-}
-
-fn read_key(app: &mut app::App) -> std::io::Result<bool> {
-    if let Event::Key(key) = event::read()? {
-        match app.editing_mode {
-            app::EditingMode::Command => match key.code {
-                KeyCode::Up => {
-                    if let Some(pos) = app.liststate.selected() {
-                        if pos > 0 {
-                            app.liststate.select(Some(pos - 1));
-                        }
-                    }
-                }
-                KeyCode::Down => {
-                    let pos = app.liststate.selected().unwrap_or_default() + 1;
-                    if pos < app.listitems.len() {
-                        app.liststate.select(Some(pos))
-                    }
-                }
-                KeyCode::Esc => {
-                    app.dialog = app::Dialog::None;
-                    app.editing_mode = app::EditingMode::Command;
-                }
-                KeyCode::Char(c) => match c {
-                    'q' => return Ok(true),
-                    'd' => {
-                        let pos = app.liststate.selected().unwrap_or_default();
-                        let id = app.savednetworksidx[pos].clone();
-                        app.savednetworksidx =
-                            app.savednetworksidx.splice(pos - 1..pos, []).collect();
-                        app.savednetworks.remove(&id);
-                    }
-                    'l' => {
-                        let pos = app.liststate.selected().unwrap_or_default();
-                        let id = app.savednetworksidx[pos].clone();
-                        tokio::spawn(client::leave_network(id));
-                    }
-                    'j' => {
-                        let pos = app.liststate.selected().unwrap_or_default();
-                        let id = app.savednetworksidx[pos].clone();
-                        tokio::spawn(client::join_network(id));
-                    }
-                    'J' => {
-                        app.dialog = app::Dialog::Join;
-                        app.editing_mode = app::EditingMode::Editing;
-                    }
-                    'c' => {
-                        app.inputbuffer = serde_json::to_string_pretty(&app.savednetworks.get(
-                            &app.savednetworksidx[app.liststate.selected().unwrap_or_default()],
-                        ))?;
-                        app.dialog = app::Dialog::Config;
-                    }
-                    _ => {}
-                },
-                _ => {}
-            },
-            app::EditingMode::Editing => match key.code {
-                KeyCode::Char(x) => {
-                    app.inputbuffer.push(x);
-                }
-                KeyCode::Esc => {
-                    app.inputbuffer = String::new();
-                    app.dialog = app::Dialog::None;
-                    app.editing_mode = app::EditingMode::Command;
-                }
-                KeyCode::Backspace => {
-                    if app.inputbuffer.len() > 0 {
-                        app.inputbuffer
-                            .drain(app.inputbuffer.len() - 1..app.inputbuffer.len());
-                    }
-                }
-                KeyCode::Enter => {
-                    tokio::spawn(client::join_network(app.inputbuffer.clone()));
-                    app.inputbuffer = String::new();
-                    app.dialog = app::Dialog::None;
-                    app.editing_mode = app::EditingMode::Command;
-                }
-                _ => {}
-            },
-        }
-    }
-    Ok(false)
 }
