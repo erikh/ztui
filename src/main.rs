@@ -1,7 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
     io::Write,
-    path::Path,
     time::{Duration, Instant},
 };
 
@@ -11,7 +10,6 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use http::{HeaderMap, HeaderValue};
 use tokio::sync::mpsc;
 use tui::{
     backend::{Backend, CrosstermBackend},
@@ -22,6 +20,8 @@ use tui::{
     Frame, Terminal,
 };
 use zerotier_one_api::types::Network;
+
+mod client;
 
 #[derive(Debug, Clone)]
 enum EditingMode {
@@ -50,7 +50,7 @@ struct App {
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    local_client_from_file(authtoken_path(None)).expect(
+    client::local_client_from_file(client::authtoken_path(None)).expect(
         "must be able to read the authtoken.secret file in the zerotier configuration directory",
     );
 
@@ -144,50 +144,6 @@ fn draw<B: Backend>(f: &mut Frame<'_, B>, app: &mut App) -> Result<(), anyhow::E
     Ok(())
 }
 
-// determine the path of the authtoken.secret
-fn authtoken_path(arg: Option<&Path>) -> &Path {
-    if let Some(arg) = arg {
-        return arg;
-    }
-
-    if cfg!(target_os = "linux") {
-        Path::new("/var/lib/zerotier-one/authtoken.secret")
-    } else if cfg!(target_os = "windows") {
-        Path::new("C:/ProgramData/ZeroTier/One/authtoken.secret")
-    } else if cfg!(target_os = "macos") {
-        Path::new("/Library/Application Support/ZeroTier/One/authtoken.secret")
-    } else {
-        panic!("authtoken.secret not found; please provide the -s option to provide a custom path")
-    }
-}
-
-fn local_client_from_file(
-    authtoken_path: &Path,
-) -> Result<zerotier_one_api::Client, anyhow::Error> {
-    let authtoken = std::fs::read_to_string(authtoken_path)?;
-    local_client(authtoken)
-}
-
-fn local_client(authtoken: String) -> Result<zerotier_one_api::Client, anyhow::Error> {
-    let mut headers = HeaderMap::new();
-    headers.insert("X-ZT1-Auth", HeaderValue::from_str(&authtoken)?);
-
-    Ok(zerotier_one_api::Client::new_with_client(
-        "http://127.0.0.1:9993",
-        reqwest::Client::builder()
-            .default_headers(headers)
-            .build()?,
-    ))
-}
-
-async fn get_networks(s: mpsc::UnboundedSender<Vec<Network>>) -> Result<(), anyhow::Error> {
-    let client = local_client_from_file(authtoken_path(None))?;
-    let networks = client.get_networks().await?;
-
-    s.send(networks.to_vec())?;
-    Ok(())
-}
-
 fn get_max_len(networks: Vec<String>) -> usize {
     networks
         .iter()
@@ -222,7 +178,7 @@ fn display_networks<B: Backend>(f: &mut Frame<'_, B>, app: &mut App) -> Result<(
 
     let (s, mut r) = mpsc::unbounded_channel();
 
-    tokio::spawn(get_networks(s));
+    tokio::spawn(client::get_networks(s));
 
     let networks: Vec<Network>;
 
@@ -358,7 +314,7 @@ fn display_networks<B: Backend>(f: &mut Frame<'_, B>, app: &mut App) -> Result<(
                             let tx_bytes = (second.1 as f64 * elapsed) - (first.1 as f64 * elapsed);
 
                             format!(
-                                "Rx: {} | Tx: {}",
+                                "Rx: {}/s | Tx: {}/s",
                                 byte_unit::Byte::from_bytes(rx_bytes as u128)
                                     .get_appropriate_unit(true)
                                     .to_string(),
@@ -453,50 +409,6 @@ fn display_help<B: Backend>(f: &mut Frame<B>) -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-async fn leave_network(network_id: String) -> Result<(), anyhow::Error> {
-    let client = local_client_from_file(authtoken_path(None))?;
-    Ok(*client.delete_network(&network_id).await?)
-}
-
-async fn join_network(network_id: String) -> Result<(), anyhow::Error> {
-    let client = local_client_from_file(authtoken_path(None))?;
-    client
-        .update_network(
-            &network_id,
-            &Network {
-                subtype_0: zerotier_one_api::types::NetworkSubtype0 {
-                    allow_default: None,
-                    allow_dns: None,
-                    allow_global: None,
-                    allow_managed: None,
-                },
-                subtype_1: zerotier_one_api::types::NetworkSubtype1 {
-                    allow_default: None,
-                    allow_dns: None,
-                    allow_global: None,
-                    allow_managed: None,
-                    assigned_addresses: Vec::new(),
-                    bridge: None,
-                    broadcast_enabled: None,
-                    dns: None,
-                    id: None,
-                    mac: None,
-                    mtu: None,
-                    multicast_subscriptions: Vec::new(),
-                    name: None,
-                    netconf_revision: None,
-                    port_device_name: None,
-                    port_error: None,
-                    routes: Vec::new(),
-                    status: None,
-                    type_: None,
-                },
-            },
-        )
-        .await?;
-    Ok(())
-}
-
 fn run_app<W: Write>(
     terminal: &mut Terminal<CrosstermBackend<W>>,
     app: &mut App,
@@ -562,12 +474,12 @@ fn run_app<W: Write>(
                             'l' => {
                                 let pos = app.liststate.selected().unwrap_or_default();
                                 let id = app.savednetworksidx[pos].clone();
-                                tokio::spawn(leave_network(id));
+                                tokio::spawn(client::leave_network(id));
                             }
                             'j' => {
                                 let pos = app.liststate.selected().unwrap_or_default();
                                 let id = app.savednetworksidx[pos].clone();
-                                tokio::spawn(join_network(id));
+                                tokio::spawn(client::join_network(id));
                             }
                             'J' => {
                                 app.dialog = Dialog::Join;
@@ -601,7 +513,7 @@ fn run_app<W: Write>(
                             }
                         }
                         KeyCode::Enter => {
-                            tokio::spawn(join_network(app.inputbuffer.clone()));
+                            tokio::spawn(client::join_network(app.inputbuffer.clone()));
                             app.inputbuffer = String::new();
                             app.dialog = Dialog::None;
                             app.editing_mode = EditingMode::Command;
