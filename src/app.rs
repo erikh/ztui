@@ -24,6 +24,12 @@ pub enum EditingMode {
 }
 
 #[derive(Debug, Clone)]
+pub enum ListFilter {
+    None,
+    Connected,
+}
+
+#[derive(Debug, Clone)]
 pub enum Dialog {
     None,
     Join,
@@ -34,6 +40,7 @@ pub enum Dialog {
 pub struct App {
     pub editing_mode: EditingMode,
     pub dialog: Dialog,
+    pub filter: ListFilter,
     pub inputbuffer: String,
     pub listitems: Vec<ListItem<'static>>,
     pub liststate: ListState,
@@ -46,6 +53,7 @@ impl Default for App {
     fn default() -> Self {
         Self {
             dialog: Dialog::None,
+            filter: ListFilter::None,
             editing_mode: EditingMode::Command,
             inputbuffer: String::new(),
             savednetworksidx: Vec::new(),
@@ -155,6 +163,12 @@ impl App {
                                         [self.liststate.selected().unwrap_or_default()],
                                 ))?;
                             self.dialog = Dialog::Config;
+                        }
+                        't' => {
+                            self.filter = match self.filter {
+                                ListFilter::None => ListFilter::Connected,
+                                ListFilter::Connected => ListFilter::None,
+                            }
                         }
                         _ => {}
                     },

@@ -14,6 +14,8 @@ use tui::{
 };
 use zerotier_one_api::types::Network;
 
+use crate::app;
+
 fn get_max_len(networks: Vec<String>) -> usize {
     networks
         .iter()
@@ -155,9 +157,16 @@ pub fn display_networks<B: Backend>(
     app.listitems = app
         .savednetworksidx
         .iter()
-        .map(|k| {
+        .filter_map(|k| {
             let v = app.savednetworks.get(k).unwrap();
-            ListItem::new(Spans::from(vec![
+
+            if let app::ListFilter::Connected = app.filter {
+                if v.subtype_1.status.clone().unwrap() == "DISCONNECTED" {
+                    return None;
+                }
+            }
+
+            Some(ListItem::new(Spans::from(vec![
                 Span::styled(k.clone(), Style::default().fg(Color::LightCyan)),
                 Span::raw(" "),
                 Span::styled(
@@ -238,7 +247,7 @@ pub fn display_networks<B: Backend>(
                     },
                     Style::default().fg(Color::LightMagenta),
                 ),
-            ]))
+            ])))
         })
         .collect::<Vec<ListItem>>();
 
@@ -272,6 +281,7 @@ pub fn display_help<B: Backend>(f: &mut Frame<B>) -> Result<(), anyhow::Error> {
         "l = Leave a bookmarked network",
         "J = Join a network by address",
         "c = review network config",
+        "t = toggle disconnected in list",
     ];
 
     let mut spans = Vec::new();
