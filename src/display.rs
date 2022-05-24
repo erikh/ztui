@@ -13,11 +13,10 @@ use tui::{
 };
 use zerotier_one_api::types::Network;
 
-use crate::app;
+use crate::app::{self, Dialog};
 
-fn get_max_len(networks: Vec<String>) -> usize {
-    networks
-        .iter()
+fn get_max_len(strs: Vec<String>) -> usize {
+    strs.iter()
         .max_by(|k, k2| {
             if k.len() > k2.len() {
                 std::cmp::Ordering::Greater
@@ -30,46 +29,51 @@ fn get_max_len(networks: Vec<String>) -> usize {
 }
 
 fn get_max_savednetworks(networks: HashMap<String, Network>) -> usize {
-    get_max_len(
-        networks
-            .iter()
-            .map(|(_, v)| v.subtype_1.name.clone().unwrap())
-            .collect::<Vec<String>>(),
-    )
+    let names = networks
+        .iter()
+        .map(|(_, v)| v.subtype_1.name.clone().unwrap())
+        .collect::<Vec<String>>();
+
+    get_max_len(names)
+}
+
+fn dialog_join<B: Backend>(f: &mut Frame<B>, app: &mut app::App) {
+    let w = f.size().width;
+
+    let layout = Layout::default()
+        .direction(tui::layout::Direction::Vertical)
+        .horizontal_margin(w / 2 - 10)
+        .constraints(
+            [
+                Constraint::Percentage(50),
+                Constraint::Length(3),
+                Constraint::Min(1),
+            ]
+            .as_ref(),
+        )
+        .split(f.size());
+
+    let orig_len = app.inputbuffer.len();
+    let len = layout[1].width as usize - app.inputbuffer.len();
+
+    app.inputbuffer += &" ".repeat(len);
+    let p = Paragraph::new(app.inputbuffer.as_ref()).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title("] Join a Network ["),
+    );
+
+    f.render_widget(p, layout[1]);
+    app.inputbuffer.truncate(orig_len);
 }
 
 pub fn display_dialogs<B: Backend>(
     f: &mut Frame<'_, B>,
     app: &mut crate::app::App,
 ) -> Result<(), anyhow::Error> {
-    if let crate::app::Dialog::Join = app.dialog {
-        let w = f.size().width;
-
-        let layout = Layout::default()
-            .direction(tui::layout::Direction::Vertical)
-            .horizontal_margin(w / 2 - 10)
-            .constraints(
-                [
-                    Constraint::Percentage(50),
-                    Constraint::Length(3),
-                    Constraint::Min(1),
-                ]
-                .as_ref(),
-            )
-            .split(f.size());
-
-        let orig_len = app.inputbuffer.len();
-        let len = layout[1].width as usize - app.inputbuffer.len();
-
-        app.inputbuffer += &" ".repeat(len);
-        let p = Paragraph::new(app.inputbuffer.as_ref()).block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title("] Join a Network ["),
-        );
-
-        f.render_widget(p, layout[1]);
-        app.inputbuffer.truncate(orig_len);
+    match app.dialog {
+        Dialog::Join => dialog_join(f, app),
+        _ => {}
     }
 
     Ok(())
