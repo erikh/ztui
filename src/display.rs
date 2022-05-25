@@ -144,27 +144,8 @@ pub fn display_networks<B: Backend>(
             continue;
         }
 
-        if let Some(net) = app
-            .nets
-            .find_by_interface(network.subtype_1.port_device_name.clone().unwrap())
-        {
-            if let Some(v) = app.last_usage.get_mut(&net.interface) {
-                v.push((net.rx_bytes as u128, net.tx_bytes as u128, Instant::now()));
-                if v.len() > 2 {
-                    let v2 = v
-                        .iter()
-                        .skip(v.len() - 3)
-                        .map(|k| *k)
-                        .collect::<Vec<(u128, u128, Instant)>>();
-                    app.last_usage.insert(net.interface.clone(), v2);
-                }
-            } else {
-                app.last_usage.insert(
-                    net.interface.clone(),
-                    vec![(net.rx_bytes as u128, net.tx_bytes as u128, Instant::now())],
-                );
-            }
-        }
+        app.nets
+            .store_usage(network.subtype_1.port_device_name.clone().unwrap())?;
     }
 
     app.listitems = app
@@ -227,35 +208,11 @@ pub fn display_networks<B: Backend>(
                 )),
                 Span::styled(
                     if let Some(s) = app
+                        .nets
                         .clone()
-                        .last_usage
-                        .get_mut(&v.subtype_1.port_device_name.clone().unwrap())
+                        .get_usage(v.subtype_1.port_device_name.clone().unwrap())
                     {
-                        if s.len() < 2 {
-                            "".to_string()
-                        } else {
-                            let len = s.len();
-                            let mut i = s.iter();
-                            let first = i.nth(len - 2).unwrap();
-                            let mut i = s.iter();
-                            let second = i.nth(len - 1).unwrap();
-
-                            // this math is wrong
-                            let elapsed =
-                                second.2.duration_since(first.2).as_millis() as f64 / 1000 as f64;
-                            let rx_bytes = (second.0 as f64 * elapsed) - (first.0 as f64 * elapsed);
-                            let tx_bytes = (second.1 as f64 * elapsed) - (first.1 as f64 * elapsed);
-
-                            format!(
-                                "Rx: {}/s | Tx: {}/s",
-                                byte_unit::Byte::from_bytes(rx_bytes as u128)
-                                    .get_appropriate_unit(true)
-                                    .to_string(),
-                                byte_unit::Byte::from_bytes(tx_bytes as u128)
-                                    .get_appropriate_unit(true)
-                                    .to_string(),
-                            )
-                        }
+                        s
                     } else {
                         "".to_string()
                     },
