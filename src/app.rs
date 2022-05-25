@@ -169,6 +169,7 @@ impl App {
                         'J' => {
                             self.dialog = Dialog::Join;
                             self.editing_mode = EditingMode::Editing;
+                            self.inputbuffer = String::new();
                         }
                         'c' => {
                             self.inputbuffer =
