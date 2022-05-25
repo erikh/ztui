@@ -6,7 +6,7 @@ use std::{
 
 use bat::{Input, PrettyPrinter};
 use crossterm::{
-    event::{self, Event, KeyCode},
+    event::{self, Event, KeyCode, KeyEvent},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -130,97 +130,109 @@ impl App {
     pub fn read_key(&mut self) -> std::io::Result<bool> {
         if let Event::Key(key) = event::read()? {
             match self.editing_mode {
-                EditingMode::Command => match key.code {
-                    KeyCode::Up => {
-                        if let Some(pos) = self.liststate.selected() {
-                            if pos > 0 {
-                                self.liststate.select(Some(pos - 1));
-                            }
-                        }
+                EditingMode::Command => {
+                    if self.command_mode_key(key)? {
+                        return Ok(true);
                     }
-                    KeyCode::Down => {
-                        let pos = self.liststate.selected().unwrap_or_default() + 1;
-                        if pos < self.listitems.len() {
-                            self.liststate.select(Some(pos))
-                        }
-                    }
-                    KeyCode::Esc => {
-                        self.dialog = Dialog::None;
-                        self.editing_mode = EditingMode::Command;
-                    }
-                    KeyCode::Char(c) => match c {
-                        'q' => return Ok(true),
-                        'd' => {
-                            let pos = self.liststate.selected().unwrap_or_default();
-                            let id = self.savednetworksidx[pos].clone();
-                            self.savednetworksidx =
-                                self.savednetworksidx.splice(pos - 1..pos, []).collect();
-                            self.savednetworks.remove(&id);
-                        }
-                        'l' => {
-                            let pos = self.liststate.selected().unwrap_or_default();
-                            let id = self.savednetworksidx[pos].clone();
-                            tokio::spawn(crate::client::leave_network(id));
-                        }
-                        'j' => {
-                            let pos = self.liststate.selected().unwrap_or_default();
-                            let id = self.savednetworksidx[pos].clone();
-                            tokio::spawn(crate::client::join_network(id));
-                        }
-                        'J' => {
-                            self.dialog = Dialog::Join;
-                            self.editing_mode = EditingMode::Editing;
-                            self.inputbuffer = String::new();
-                        }
-                        'c' => {
-                            self.inputbuffer =
-                                serde_json::to_string_pretty(&self.savednetworks.get(
-                                    &self.savednetworksidx
-                                        [self.liststate.selected().unwrap_or_default()],
-                                ))?;
-                            self.dialog = Dialog::Config;
-                        }
-                        't' => {
-                            self.filter = match self.filter {
-                                ListFilter::None => ListFilter::Connected,
-                                ListFilter::Connected => ListFilter::None,
-                            }
-                        }
-                        'h' => {
-                            self.dialog = match self.dialog {
-                                Dialog::Help => Dialog::None,
-                                _ => Dialog::Help,
-                            }
-                        }
-                        _ => {}
-                    },
-                    _ => {}
-                },
-                EditingMode::Editing => match key.code {
-                    KeyCode::Char(x) => {
-                        self.inputbuffer.push(x);
-                    }
-                    KeyCode::Esc => {
-                        self.inputbuffer = String::new();
-                        self.dialog = Dialog::None;
-                        self.editing_mode = EditingMode::Command;
-                    }
-                    KeyCode::Backspace => {
-                        if self.inputbuffer.len() > 0 {
-                            self.inputbuffer
-                                .drain(self.inputbuffer.len() - 1..self.inputbuffer.len());
-                        }
-                    }
-                    KeyCode::Enter => {
-                        tokio::spawn(crate::client::join_network(self.inputbuffer.clone()));
-                        self.inputbuffer = String::new();
-                        self.dialog = Dialog::None;
-                        self.editing_mode = EditingMode::Command;
-                    }
-                    _ => {}
-                },
+                }
+                EditingMode::Editing => self.edit_mode_key(key),
             }
         }
         Ok(false)
+    }
+
+    fn command_mode_key(&mut self, key: KeyEvent) -> std::io::Result<bool> {
+        match key.code {
+            KeyCode::Up => {
+                if let Some(pos) = self.liststate.selected() {
+                    if pos > 0 {
+                        self.liststate.select(Some(pos - 1));
+                    }
+                }
+            }
+            KeyCode::Down => {
+                let pos = self.liststate.selected().unwrap_or_default() + 1;
+                if pos < self.listitems.len() {
+                    self.liststate.select(Some(pos))
+                }
+            }
+            KeyCode::Esc => {
+                self.dialog = Dialog::None;
+                self.editing_mode = EditingMode::Command;
+            }
+            KeyCode::Char(c) => match c {
+                'q' => return Ok(true),
+                'd' => {
+                    let pos = self.liststate.selected().unwrap_or_default();
+                    let id = self.savednetworksidx[pos].clone();
+                    self.savednetworksidx =
+                        self.savednetworksidx.splice(pos - 1..pos, []).collect();
+                    self.savednetworks.remove(&id);
+                }
+                'l' => {
+                    let pos = self.liststate.selected().unwrap_or_default();
+                    let id = self.savednetworksidx[pos].clone();
+                    tokio::spawn(crate::client::leave_network(id));
+                }
+                'j' => {
+                    let pos = self.liststate.selected().unwrap_or_default();
+                    let id = self.savednetworksidx[pos].clone();
+                    tokio::spawn(crate::client::join_network(id));
+                }
+                'J' => {
+                    self.dialog = Dialog::Join;
+                    self.editing_mode = EditingMode::Editing;
+                    self.inputbuffer = String::new();
+                }
+                'c' => {
+                    self.inputbuffer = serde_json::to_string_pretty(&self.savednetworks.get(
+                        &self.savednetworksidx[self.liststate.selected().unwrap_or_default()],
+                    ))?;
+                    self.dialog = Dialog::Config;
+                }
+                't' => {
+                    self.filter = match self.filter {
+                        ListFilter::None => ListFilter::Connected,
+                        ListFilter::Connected => ListFilter::None,
+                    }
+                }
+                'h' => {
+                    self.dialog = match self.dialog {
+                        Dialog::Help => Dialog::None,
+                        _ => Dialog::Help,
+                    }
+                }
+                _ => {}
+            },
+            _ => {}
+        }
+
+        Ok(false)
+    }
+
+    fn edit_mode_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Char(x) => {
+                self.inputbuffer.push(x);
+            }
+            KeyCode::Esc => {
+                self.inputbuffer = String::new();
+                self.dialog = Dialog::None;
+                self.editing_mode = EditingMode::Command;
+            }
+            KeyCode::Backspace => {
+                if self.inputbuffer.len() > 0 {
+                    self.inputbuffer
+                        .drain(self.inputbuffer.len() - 1..self.inputbuffer.len());
+                }
+            }
+            KeyCode::Enter => {
+                tokio::spawn(crate::client::join_network(self.inputbuffer.clone()));
+                self.inputbuffer = String::new();
+                self.dialog = Dialog::None;
+                self.editing_mode = EditingMode::Command;
+            }
+            _ => {}
+        }
     }
 }
