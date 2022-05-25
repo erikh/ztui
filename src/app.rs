@@ -258,7 +258,12 @@ impl App {
                                 });
 
                                 child.wait()?;
+
+                                eprintln!("\nPress ENTER to continue");
+                                let mut buf = [0u8; 1];
+                                std::io::stdin().lock().read(&mut buf).unwrap();
                             });
+
                             terminal.clear()?;
                         }
                     }
