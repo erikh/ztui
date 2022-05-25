@@ -9,6 +9,15 @@ pub struct Nets {
     last_usage: HashMap<String, Vec<(u128, u128, Instant)>>,
 }
 
+impl Default for Nets {
+    fn default() -> Self {
+        Self {
+            nets: sys_metrics::network::get_ionets().unwrap(),
+            last_usage: HashMap::new(),
+        }
+    }
+}
+
 impl Nets {
     pub fn new() -> Result<Self, anyhow::Error> {
         Ok(Self {

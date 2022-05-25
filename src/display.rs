@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use tui::{
     backend::Backend,
     layout::{Constraint, Layout, Rect},
@@ -14,7 +12,7 @@ use crate::app::{App, Dialog, ListFilter, STATUS_DISCONNECTED};
 
 macro_rules! filter_disconnected {
     ($app:expr, $val:block) => {
-        $app.savednetworks
+        $app.config
             .iter()
             .filter_map(|(_, v)| {
                 if let ListFilter::Connected = $app.filter {
@@ -124,40 +122,13 @@ pub fn display_networks<B: Backend>(
         .borders(Borders::ALL)
         .title("[ ZeroTier Terminal UI | Press h for Help ]");
 
-    let mut new = false;
-    let mut ids = HashSet::new();
-
-    for network in &networks {
-        let id = network.subtype_1.id.clone().unwrap();
-
-        ids.insert(id.clone());
-
-        if !app.savednetworks.contains_key(&id) {
-            new = true;
-        }
-
-        app.savednetworks.insert(id, network.clone());
-    }
-
-    for (id, network) in app.savednetworks.iter_mut() {
-        if !app.savednetworksidx.contains(id) {
-            app.savednetworksidx.push(id.clone());
-        }
-
-        if !ids.contains(id) {
-            network.subtype_1.status = Some(STATUS_DISCONNECTED.to_string());
-            continue;
-        }
-
-        app.nets
-            .store_usage(network.subtype_1.port_device_name.clone().unwrap())?;
-    }
+    let new = app.config.update_networks(networks)?;
 
     app.listitems = app
-        .savednetworksidx
-        .iter()
+        .config
+        .idx_iter()
         .filter_map(|k| {
-            let v = app.savednetworks.get(k).unwrap();
+            let v = app.config.get(k).unwrap();
 
             if let ListFilter::Connected = app.filter {
                 if v.subtype_1.status.clone().unwrap() == STATUS_DISCONNECTED {
@@ -186,7 +157,7 @@ pub fn display_networks<B: Backend>(
                     }),
                 ),
                 Span::raw(get_space_offset!(
-                    app.savednetworks,
+                    app.config,
                     v.subtype_1.status.clone().unwrap_or_default(),
                     {
                         |(_, v2)| {
@@ -207,12 +178,13 @@ pub fn display_networks<B: Backend>(
                     Style::default().fg(Color::LightGreen),
                 ),
                 Span::raw(get_space_offset!(
-                    app.savednetworks,
+                    app.config,
                     v.subtype_1.assigned_addresses.join(", "),
                     { |(_, v2)| Some(v2.subtype_1.assigned_addresses.join(", ")) }
                 )),
                 Span::styled(
                     if let Some(s) = app
+                        .config
                         .nets
                         .clone()
                         .get_usage(v.subtype_1.port_device_name.clone().unwrap())

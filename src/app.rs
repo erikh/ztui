@@ -17,7 +17,7 @@ use tui::{
 };
 use zerotier_one_api::types::Network;
 
-use crate::nets::Nets;
+use crate::config::Config;
 
 pub const STATUS_DISCONNECTED: &str = "DISCONNECTED";
 
@@ -44,27 +44,23 @@ pub enum Dialog {
 #[derive(Debug, Clone)]
 pub struct App {
     pub editing_mode: EditingMode,
+    pub config: Config,
     pub dialog: Dialog,
     pub filter: ListFilter,
     pub inputbuffer: String,
     pub listitems: Vec<ListItem<'static>>,
     pub liststate: ListState,
-    pub savednetworks: HashMap<String, Network>,
-    pub savednetworksidx: Vec<String>,
     pub last_usage: HashMap<String, Vec<(u128, u128, Instant)>>,
-    pub nets: Nets,
 }
 
 impl Default for App {
     fn default() -> Self {
         Self {
-            nets: Nets::new().unwrap(),
+            config: Config::default(),
             dialog: Dialog::None,
             filter: ListFilter::None,
             editing_mode: EditingMode::Command,
             inputbuffer: String::new(),
-            savednetworksidx: Vec::new(),
-            savednetworks: HashMap::new(),
             last_usage: HashMap::new(),
             listitems: Vec::new(),
             liststate: ListState::default(),
@@ -80,7 +76,7 @@ impl App {
         terminal.clear()?;
         loop {
             let networks = crate::client::sync_get_networks()?;
-            self.nets.refresh()?;
+            self.config.nets.refresh()?;
 
             if let Dialog::Config = self.dialog {
                 crate::temp_mute_terminal!(terminal, {
@@ -158,19 +154,16 @@ impl App {
                 'q' => return Ok(true),
                 'd' => {
                     let pos = self.liststate.selected().unwrap_or_default();
-                    let id = self.savednetworksidx[pos].clone();
-                    self.savednetworksidx =
-                        self.savednetworksidx.splice(pos - 1..pos, []).collect();
-                    self.savednetworks.remove(&id);
+                    self.config.remove_network(pos);
                 }
                 'l' => {
                     let pos = self.liststate.selected().unwrap_or_default();
-                    let id = self.savednetworksidx[pos].clone();
+                    let id = self.config.get_network_id_by_pos(pos);
                     tokio::spawn(crate::client::leave_network(id));
                 }
                 'j' => {
                     let pos = self.liststate.selected().unwrap_or_default();
-                    let id = self.savednetworksidx[pos].clone();
+                    let id = self.config.get_network_id_by_pos(pos);
                     tokio::spawn(crate::client::join_network(id));
                 }
                 'J' => {
@@ -179,9 +172,11 @@ impl App {
                     self.inputbuffer = String::new();
                 }
                 'c' => {
-                    self.inputbuffer = serde_json::to_string_pretty(&self.savednetworks.get(
-                        &self.savednetworksidx[self.liststate.selected().unwrap_or_default()],
-                    ))?;
+                    self.inputbuffer = serde_json::to_string_pretty(
+                        &self
+                            .config
+                            .get_network_by_pos(self.liststate.selected().unwrap_or_default()),
+                    )?;
                     self.dialog = Dialog::Config;
                 }
                 't' => {
