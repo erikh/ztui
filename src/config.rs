@@ -15,19 +15,39 @@ pub fn config_path() -> PathBuf {
         .join(".config.zerotier")
 }
 
+fn template(s: Option<&String>, interface: String) -> Option<String> {
+    if s.is_none() {
+        return None;
+    }
+
+    Some(
+        s.clone()
+            .unwrap()
+            .replace("%i", &format!("'{}'", interface)),
+    )
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UserConfig {}
+pub struct UserConfig {
+    commands: HashMap<char, String>,
+}
 
 impl UserConfig {
     pub fn from_dir(filename: PathBuf) -> Result<Self, anyhow::Error> {
         let config_file = std::fs::read_to_string(filename.join("config.json"))?;
         Ok(serde_json::from_str(&config_file)?)
     }
+
+    pub fn command_for(&self, c: char, interface: String) -> Option<String> {
+        template(self.commands.get(&c), interface)
+    }
 }
 
 impl Default for UserConfig {
     fn default() -> Self {
-        Self {}
+        Self {
+            commands: HashMap::new(),
+        }
     }
 }
 
@@ -72,6 +92,10 @@ impl Settings {
             filename.join("settings.json"),
             serde_json::to_string_pretty(self)?,
         )?)
+    }
+
+    pub fn user_config(&self) -> UserConfig {
+        self.user_config.clone()
     }
 
     pub fn set_filter(&mut self, filter: ListFilter) {

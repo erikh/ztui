@@ -19,3 +19,5 @@ serde = "*"
 directories = "*"
 bat = { version = "*", default-features = false, features = [ "minimal-application" ] }
 byte-unit = "*"
+portable-pty = "*"
+libc = "*"

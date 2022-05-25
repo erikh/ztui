@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    io::Write,
+    io::{Read, Write},
     time::{Duration, Instant},
 };
 
@@ -10,7 +10,9 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use serde::{Deserialize, Serialize};
+use tokio::sync::mpsc;
 use tui::{
     backend::{Backend, CrosstermBackend},
     widgets::{ListItem, ListState},
@@ -98,7 +100,7 @@ impl App {
                 .checked_sub(last_tick.elapsed())
                 .unwrap_or_else(|| Duration::from_secs(0));
             if crossterm::event::poll(timeout)? {
-                if self.read_key()? {
+                if self.read_key(terminal)? {
                     return Ok(());
                 }
             }
@@ -116,21 +118,28 @@ impl App {
         Ok(())
     }
 
-    pub fn read_key(&mut self) -> std::io::Result<bool> {
+    pub fn read_key<W: Write>(
+        &mut self,
+        terminal: &mut Terminal<CrosstermBackend<W>>,
+    ) -> std::io::Result<bool> {
         if let Event::Key(key) = event::read()? {
             match self.editing_mode {
                 EditingMode::Command => {
-                    if self.command_mode_key(key)? {
+                    if self.command_mode_key(terminal, key)? {
                         return Ok(true);
                     }
                 }
-                EditingMode::Editing => self.edit_mode_key(key),
+                EditingMode::Editing => self.edit_mode_key(terminal, key),
             }
         }
         Ok(false)
     }
 
-    fn command_mode_key(&mut self, key: KeyEvent) -> std::io::Result<bool> {
+    fn command_mode_key<W: Write>(
+        &mut self,
+        terminal: &mut Terminal<CrosstermBackend<W>>,
+        key: KeyEvent,
+    ) -> std::io::Result<bool> {
         match key.code {
             KeyCode::Up => {
                 if let Some(pos) = self.liststate.selected() {
@@ -188,7 +197,72 @@ impl App {
                         _ => Dialog::Help,
                     }
                 }
-                _ => {}
+                x => {
+                    if let Some(net) = self
+                        .settings
+                        .get_network_by_pos(self.liststate.selected().unwrap_or_default())
+                    {
+                        if let Some(s) = self
+                            .settings
+                            .user_config()
+                            .command_for(x, net.subtype_1.port_device_name.clone().unwrap())
+                        {
+                            let mut args = vec!["-c"];
+                            args.push(&s);
+
+                            crate::temp_mute_terminal!(terminal, {
+                                terminal.clear()?;
+
+                                let pty_system = native_pty_system();
+                                let pair = pty_system
+                                    .openpty(PtySize {
+                                        rows: terminal.size().unwrap().height,
+                                        cols: terminal.size().unwrap().width,
+                                        pixel_width: 0,
+                                        pixel_height: 0,
+                                    })
+                                    .unwrap();
+
+                                let mut cmd = CommandBuilder::new("/bin/sh");
+                                cmd.args(args);
+
+                                let mut child = pair.slave.spawn_command(cmd).unwrap();
+                                let pid = child.process_id().unwrap();
+
+                                let (s, mut r) = mpsc::unbounded_channel();
+
+                                tokio::spawn(async move {
+                                    tokio::signal::ctrl_c().await.unwrap();
+                                    unsafe { libc::kill(pid as i32, libc::SIGTERM) };
+                                    s.send(()).unwrap();
+                                });
+
+                                let mut reader = pair.master.try_clone_reader().unwrap();
+                                let mut writer = pair.master.try_clone_writer().unwrap();
+
+                                std::thread::spawn(move || {
+                                    std::io::copy(&mut reader, &mut std::io::stdout().lock())
+                                        .unwrap();
+                                });
+
+                                std::thread::spawn(move || {
+                                    let mut buf = [0u8; 1];
+
+                                    while let Ok(size) = std::io::stdin().lock().read(&mut buf) {
+                                        writer.write_all(&buf[0..size]).unwrap();
+
+                                        if let Ok(_) = r.try_recv() {
+                                            return;
+                                        }
+                                    }
+                                });
+
+                                child.wait()?;
+                            });
+                            terminal.clear()?;
+                        }
+                    }
+                }
             },
             _ => {}
         }
@@ -196,7 +270,11 @@ impl App {
         Ok(false)
     }
 
-    fn edit_mode_key(&mut self, key: KeyEvent) {
+    fn edit_mode_key<W: Write>(
+        &mut self,
+        _terminal: &mut Terminal<CrosstermBackend<W>>,
+        key: KeyEvent,
+    ) {
         match key.code {
             KeyCode::Char(x) => {
                 self.inputbuffer.push(x);
