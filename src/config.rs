@@ -6,7 +6,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use zerotier_one_api::types::Network;
 
-use crate::nets::Nets;
+use crate::{app::ListFilter, nets::Nets};
 
 pub fn config_path() -> PathBuf {
     directories::UserDirs::new()
@@ -19,6 +19,7 @@ pub fn config_path() -> PathBuf {
 pub struct Config {
     savednetworks: HashMap<String, Network>,
     savednetworksidx: Vec<String>,
+    filter: ListFilter,
     #[serde(skip)]
     pub nets: Nets,
 }
@@ -26,6 +27,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
+            filter: ListFilter::None,
             savednetworks: HashMap::new(),
             savednetworksidx: Vec::new(),
             nets: Nets::new().unwrap(),
@@ -41,6 +43,14 @@ impl Config {
 
     pub fn to_file(&self, filename: PathBuf) -> Result<(), anyhow::Error> {
         Ok(std::fs::write(filename, serde_json::to_string(self)?)?)
+    }
+
+    pub fn set_filter(&mut self, filter: ListFilter) {
+        self.filter = filter
+    }
+
+    pub fn filter(&self) -> ListFilter {
+        self.filter.clone()
     }
 
     pub fn update_networks(&mut self, networks: Vec<Network>) -> Result<bool, anyhow::Error> {

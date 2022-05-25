@@ -15,7 +15,7 @@ macro_rules! filter_disconnected {
         $app.config
             .iter()
             .filter_map(|(_, v)| {
-                if let ListFilter::Connected = $app.filter {
+                if let ListFilter::Connected = $app.config.filter() {
                     if v.subtype_1.status.clone().unwrap() != STATUS_DISCONNECTED {
                         Some($val(v))
                     } else {
@@ -130,7 +130,7 @@ pub fn display_networks<B: Backend>(
         .filter_map(|k| {
             let v = app.config.get(k).unwrap();
 
-            if let ListFilter::Connected = app.filter {
+            if let ListFilter::Connected = app.config.filter() {
                 if v.subtype_1.status.clone().unwrap() == STATUS_DISCONNECTED {
                     return None;
                 }
@@ -161,7 +161,7 @@ pub fn display_networks<B: Backend>(
                     v.subtype_1.status.clone().unwrap_or_default(),
                     {
                         |(_, v2)| {
-                            if let ListFilter::Connected = app.filter {
+                            if let ListFilter::Connected = app.config.filter() {
                                 if v2.subtype_1.status.clone().unwrap() == STATUS_DISCONNECTED {
                                     None
                                 } else {

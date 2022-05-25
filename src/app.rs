@@ -10,6 +10,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use serde::{Deserialize, Serialize};
 use tui::{
     backend::{Backend, CrosstermBackend},
     widgets::{ListItem, ListState},
@@ -21,19 +22,19 @@ use crate::config::Config;
 
 pub const STATUS_DISCONNECTED: &str = "DISCONNECTED";
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EditingMode {
     Command,
     Editing,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ListFilter {
     None,
     Connected,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Dialog {
     None,
     Join,
@@ -46,7 +47,6 @@ pub struct App {
     pub editing_mode: EditingMode,
     pub config: Config,
     pub dialog: Dialog,
-    pub filter: ListFilter,
     pub inputbuffer: String,
     pub listitems: Vec<ListItem<'static>>,
     pub liststate: ListState,
@@ -58,7 +58,6 @@ impl Default for App {
         Self {
             config: Config::default(),
             dialog: Dialog::None,
-            filter: ListFilter::None,
             editing_mode: EditingMode::Command,
             inputbuffer: String::new(),
             last_usage: HashMap::new(),
@@ -179,12 +178,10 @@ impl App {
                     )?;
                     self.dialog = Dialog::Config;
                 }
-                't' => {
-                    self.filter = match self.filter {
-                        ListFilter::None => ListFilter::Connected,
-                        ListFilter::Connected => ListFilter::None,
-                    }
-                }
+                't' => self.config.set_filter(match self.config.filter() {
+                    ListFilter::None => ListFilter::Connected,
+                    ListFilter::Connected => ListFilter::None,
+                }),
                 'h' => {
                     self.dialog = match self.dialog {
                         Dialog::Help => Dialog::None,
