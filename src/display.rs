@@ -99,7 +99,12 @@ pub fn display_dialogs<B: Backend>(
     app: &mut App,
 ) -> Result<(), anyhow::Error> {
     match app.dialog {
-        Dialog::Join => dialog_join(f, app),
+        Dialog::Join => {
+            dialog_join(f, app);
+        }
+        Dialog::Help => {
+            dialog_help(f)?;
+        }
         _ => {}
     }
 
@@ -116,8 +121,8 @@ pub fn display_networks<B: Backend>(
         .split(f.size());
 
     let titleblock = Block::default()
-        .borders(Borders::TOP | Borders::LEFT | Borders::RIGHT)
-        .title("[ ZeroTier Terminal UI ]");
+        .borders(Borders::ALL)
+        .title("[ ZeroTier Terminal UI | Press h for Help ]");
 
     let mut new = false;
     let mut ids = HashSet::new();
@@ -239,13 +244,14 @@ pub fn display_networks<B: Backend>(
     Ok(())
 }
 
-pub fn display_help<B: Backend>(f: &mut Frame<B>) -> Result<(), anyhow::Error> {
+pub fn dialog_help<B: Backend>(f: &mut Frame<B>) -> Result<(), anyhow::Error> {
     let block = Block::default()
         .borders(Borders::ALL)
         .title(Span::from("[ Help ]"));
 
     let help_text = vec![
         "Up/Down = Navigate the List",
+        "<Esc> = back out of something",
         "d = Delete a list member",
         "q = Quit",
         "j = Join a bookmarked network",
@@ -255,36 +261,14 @@ pub fn display_help<B: Backend>(f: &mut Frame<B>) -> Result<(), anyhow::Error> {
         "t = toggle disconnected in list",
     ];
 
-    let mut spans = Vec::new();
-
-    let ht2 = help_text.clone();
-    let mut x = 0;
-    loop {
-        if help_text.len() < x {
-            break;
-        }
-        let mut items = Vec::new();
-        for i in 0..help_text.len() / 2 {
-            if help_text.len() <= i + x {
-                break;
-            }
-            items.push(help_text[i + x]);
-        }
-        x += 3;
-        let mut s = Vec::new();
-        let mut y = 0;
-        for t in &items {
-            y += 1;
-            s.push(Span::from(t.to_string()));
-            if y < help_text.len() / 2 {
-                s.push(Span::raw(get_space_offset!(ht2, t, {
-                    |s| Some(s.to_string())
-                })));
-            }
-        }
-
-        spans.push(Spans::from(s));
-    }
+    let spans = help_text
+        .iter()
+        .map(|s| {
+            Spans::from(Span::raw(
+                s.to_string() + &get_space_offset!(help_text, s, { |s| Some(s.to_string()) }),
+            ))
+        })
+        .collect::<Vec<Spans>>();
 
     let para = Paragraph::new(spans).block(block).wrap(Wrap { trim: true });
 
@@ -292,9 +276,10 @@ pub fn display_help<B: Backend>(f: &mut Frame<B>) -> Result<(), anyhow::Error> {
     let w = size.width;
     let h = size.height;
     let mut rect = Rect::default();
-    rect.y = h - 5;
-    rect.width = w;
-    rect.height = h - rect.y;
+    rect.x = w / 4;
+    rect.y = h / 4;
+    rect.width = w / 2;
+    rect.height = h / 2;
     f.render_widget(para, rect);
     Ok(())
 }

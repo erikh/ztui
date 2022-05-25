@@ -38,6 +38,7 @@ pub enum Dialog {
     None,
     Join,
     Config,
+    Help,
 }
 
 #[derive(Debug, Clone)]
@@ -121,7 +122,6 @@ impl App {
         networks: Vec<Network>,
     ) -> Result<(), anyhow::Error> {
         crate::display::display_networks(f, self, networks)?;
-        crate::display::display_help(f)?;
         crate::display::display_dialogs(f, self)?;
 
         Ok(())
@@ -184,6 +184,12 @@ impl App {
                             self.filter = match self.filter {
                                 ListFilter::None => ListFilter::Connected,
                                 ListFilter::Connected => ListFilter::None,
+                            }
+                        }
+                        'h' => {
+                            self.dialog = match self.dialog {
+                                Dialog::Help => Dialog::None,
+                                _ => Dialog::Help,
                             }
                         }
                         _ => {}
