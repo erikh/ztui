@@ -1,5 +1,5 @@
 use crate::{
-    config::{config_path, Config},
+    config::{config_path, Settings},
     terminal::deinit_terminal,
 };
 
@@ -19,9 +19,10 @@ async fn main() -> Result<(), anyhow::Error> {
     let mut terminal = terminal::init_terminal()?;
 
     let mut app = app::App::default();
-    app.config = match Config::from_file(config_path()) {
+    std::fs::create_dir_all(config_path())?;
+    app.settings = match Settings::from_dir(config_path()) {
         Ok(c) => c,
-        Err(_) => Config::default(),
+        Err(_) => Settings::default(),
     };
 
     terminal.clear()?;
@@ -29,7 +30,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let res = app.run(&mut terminal);
 
-    app.config.to_file(config_path())?;
+    app.settings.to_file(config_path())?;
     deinit_terminal(terminal)?;
 
     if let Err(err) = res {

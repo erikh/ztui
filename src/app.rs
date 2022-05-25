@@ -18,7 +18,7 @@ use tui::{
 };
 use zerotier_one_api::types::Network;
 
-use crate::config::Config;
+use crate::config::Settings;
 
 pub const STATUS_DISCONNECTED: &str = "DISCONNECTED";
 
@@ -45,7 +45,7 @@ pub enum Dialog {
 #[derive(Debug, Clone)]
 pub struct App {
     pub editing_mode: EditingMode,
-    pub config: Config,
+    pub settings: Settings,
     pub dialog: Dialog,
     pub inputbuffer: String,
     pub listitems: Vec<ListItem<'static>>,
@@ -56,7 +56,7 @@ pub struct App {
 impl Default for App {
     fn default() -> Self {
         Self {
-            config: Config::default(),
+            settings: Settings::default(),
             dialog: Dialog::None,
             editing_mode: EditingMode::Command,
             inputbuffer: String::new(),
@@ -75,12 +75,12 @@ impl App {
         terminal.clear()?;
         loop {
             let networks = crate::client::sync_get_networks()?;
-            self.config.nets.refresh()?;
+            self.settings.nets.refresh()?;
 
             if let Dialog::Config = self.dialog {
                 crate::temp_mute_terminal!(terminal, {
                     PrettyPrinter::new()
-                        .input(Input::from_bytes(self.inputbuffer.as_bytes()).name("config.json"))
+                        .input(Input::from_bytes(self.inputbuffer.as_bytes()).name("settings.json"))
                         .paging_mode(bat::PagingMode::Always)
                         .print()
                         .expect("could not print");
@@ -153,16 +153,16 @@ impl App {
                 'q' => return Ok(true),
                 'd' => {
                     let pos = self.liststate.selected().unwrap_or_default();
-                    self.config.remove_network(pos);
+                    self.settings.remove_network(pos);
                 }
                 'l' => {
                     let pos = self.liststate.selected().unwrap_or_default();
-                    let id = self.config.get_network_id_by_pos(pos);
+                    let id = self.settings.get_network_id_by_pos(pos);
                     tokio::spawn(crate::client::leave_network(id));
                 }
                 'j' => {
                     let pos = self.liststate.selected().unwrap_or_default();
-                    let id = self.config.get_network_id_by_pos(pos);
+                    let id = self.settings.get_network_id_by_pos(pos);
                     tokio::spawn(crate::client::join_network(id));
                 }
                 'J' => {
@@ -173,12 +173,12 @@ impl App {
                 'c' => {
                     self.inputbuffer = serde_json::to_string_pretty(
                         &self
-                            .config
+                            .settings
                             .get_network_by_pos(self.liststate.selected().unwrap_or_default()),
                     )?;
                     self.dialog = Dialog::Config;
                 }
-                't' => self.config.set_filter(match self.config.filter() {
+                't' => self.settings.set_filter(match self.settings.filter() {
                     ListFilter::None => ListFilter::Connected,
                     ListFilter::Connected => ListFilter::None,
                 }),

@@ -12,10 +12,10 @@ use crate::app::{App, Dialog, ListFilter, STATUS_DISCONNECTED};
 
 macro_rules! filter_disconnected {
     ($app:expr, $val:block) => {
-        $app.config
+        $app.settings
             .iter()
             .filter_map(|(_, v)| {
-                if let ListFilter::Connected = $app.config.filter() {
+                if let ListFilter::Connected = $app.settings.filter() {
                     if v.subtype_1.status.clone().unwrap() != STATUS_DISCONNECTED {
                         Some($val(v))
                     } else {
@@ -122,15 +122,15 @@ pub fn display_networks<B: Backend>(
         .borders(Borders::ALL)
         .title("[ ZeroTier Terminal UI | Press h for Help ]");
 
-    let new = app.config.update_networks(networks)?;
+    let new = app.settings.update_networks(networks)?;
 
     app.listitems = app
-        .config
+        .settings
         .idx_iter()
         .filter_map(|k| {
-            let v = app.config.get(k).unwrap();
+            let v = app.settings.get(k).unwrap();
 
-            if let ListFilter::Connected = app.config.filter() {
+            if let ListFilter::Connected = app.settings.filter() {
                 if v.subtype_1.status.clone().unwrap() == STATUS_DISCONNECTED {
                     return None;
                 }
@@ -157,11 +157,11 @@ pub fn display_networks<B: Backend>(
                     }),
                 ),
                 Span::raw(get_space_offset!(
-                    app.config,
+                    app.settings,
                     v.subtype_1.status.clone().unwrap_or_default(),
                     {
                         |(_, v2)| {
-                            if let ListFilter::Connected = app.config.filter() {
+                            if let ListFilter::Connected = app.settings.filter() {
                                 if v2.subtype_1.status.clone().unwrap() == STATUS_DISCONNECTED {
                                     None
                                 } else {
@@ -178,13 +178,13 @@ pub fn display_networks<B: Backend>(
                     Style::default().fg(Color::LightGreen),
                 ),
                 Span::raw(get_space_offset!(
-                    app.config,
+                    app.settings,
                     v.subtype_1.assigned_addresses.join(", "),
                     { |(_, v2)| Some(v2.subtype_1.assigned_addresses.join(", ")) }
                 )),
                 Span::styled(
                     if let Some(s) = app
-                        .config
+                        .settings
                         .nets
                         .clone()
                         .get_usage(v.subtype_1.port_device_name.clone().unwrap())
@@ -229,7 +229,7 @@ pub fn dialog_help<B: Backend>(f: &mut Frame<B>) -> Result<(), anyhow::Error> {
         "j = Join a bookmarked network",
         "l = Leave a bookmarked network",
         "J = Join a network by address",
-        "c = review network config",
+        "c = review network settings",
         "t = toggle disconnected in list",
     ];
 

@@ -16,17 +16,36 @@ pub fn config_path() -> PathBuf {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Config {
+pub struct UserConfig {}
+
+impl UserConfig {
+    pub fn from_dir(filename: PathBuf) -> Result<Self, anyhow::Error> {
+        let config_file = std::fs::read_to_string(filename.join("config.json"))?;
+        Ok(serde_json::from_str(&config_file)?)
+    }
+}
+
+impl Default for UserConfig {
+    fn default() -> Self {
+        Self {}
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Settings {
     savednetworks: HashMap<String, Network>,
     savednetworksidx: Vec<String>,
     filter: ListFilter,
     #[serde(skip)]
+    user_config: UserConfig,
+    #[serde(skip)]
     pub nets: Nets,
 }
 
-impl Default for Config {
+impl Default for Settings {
     fn default() -> Self {
         Self {
+            user_config: UserConfig::default(),
             filter: ListFilter::None,
             savednetworks: HashMap::new(),
             savednetworksidx: Vec::new(),
@@ -35,14 +54,24 @@ impl Default for Config {
     }
 }
 
-impl Config {
-    pub fn from_file(filename: PathBuf) -> Result<Self, anyhow::Error> {
-        let config_file = std::fs::read_to_string(filename).unwrap_or("{}".to_string());
-        Ok(serde_json::from_str(&config_file)?)
+impl Settings {
+    pub fn from_dir(filename: PathBuf) -> Result<Self, anyhow::Error> {
+        let config_file = std::fs::read_to_string(filename.join("settings.json"))?;
+        let mut config: Self = serde_json::from_str(&config_file)?;
+
+        config.user_config = match UserConfig::from_dir(filename) {
+            Ok(uc) => uc,
+            Err(_) => UserConfig::default(),
+        };
+
+        Ok(config)
     }
 
     pub fn to_file(&self, filename: PathBuf) -> Result<(), anyhow::Error> {
-        Ok(std::fs::write(filename, serde_json::to_string(self)?)?)
+        Ok(std::fs::write(
+            filename.join("settings.json"),
+            serde_json::to_string_pretty(self)?,
+        )?)
     }
 
     pub fn set_filter(&mut self, filter: ListFilter) {
