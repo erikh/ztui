@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
@@ -8,15 +6,9 @@ use tui::{backend::CrosstermBackend, Terminal};
 
 mod app;
 mod client;
+mod config;
 mod display;
 mod nets;
-
-fn home_dir() -> PathBuf {
-    directories::UserDirs::new()
-        .expect("could not locate your home directory")
-        .home_dir()
-        .join(".networks.zerotier")
-}
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
@@ -32,7 +24,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let mut terminal = Terminal::new(backend)?;
     let mut app = app::App::default();
 
-    let networks_file = std::fs::read_to_string(home_dir()).unwrap_or("{}".to_string());
+    let networks_file = std::fs::read_to_string(config::config_path()).unwrap_or("{}".to_string());
     app.savednetworks = serde_json::from_str(&networks_file)?;
 
     terminal.clear()?;
@@ -41,7 +33,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let res = app.run(&mut terminal);
 
     std::fs::write(
-        home_dir(),
+        config::config_path(),
         serde_json::to_string(&app.savednetworks.clone())?,
     )?;
 
