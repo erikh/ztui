@@ -83,19 +83,13 @@ impl App {
             self.nets.refresh()?;
 
             if let Dialog::Config = self.dialog {
-                disable_raw_mode()?;
-                execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
-                terminal.show_cursor()?;
-                PrettyPrinter::new()
-                    .input(Input::from_bytes(self.inputbuffer.as_bytes()).name("config.json"))
-                    .paging_mode(bat::PagingMode::Always)
-                    .print()
-                    .expect("could not print");
-
-                enable_raw_mode()?;
-                execute!(terminal.backend_mut(), EnterAlternateScreen)?;
-                terminal.hide_cursor()?;
-                terminal.clear()?;
+                crate::temp_mute_terminal!(terminal, {
+                    PrettyPrinter::new()
+                        .input(Input::from_bytes(self.inputbuffer.as_bytes()).name("config.json"))
+                        .paging_mode(bat::PagingMode::Always)
+                        .print()
+                        .expect("could not print");
+                });
                 self.dialog = Dialog::None;
                 self.inputbuffer = String::new();
             }

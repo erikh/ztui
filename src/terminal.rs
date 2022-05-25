@@ -23,3 +23,17 @@ pub fn deinit_terminal(
     terminal.show_cursor()?;
     Ok(())
 }
+
+#[macro_export]
+macro_rules! temp_mute_terminal {
+    ($terminal:expr, $code:block) => {
+        disable_raw_mode()?;
+        execute!($terminal.backend_mut(), LeaveAlternateScreen)?;
+        $terminal.show_cursor()?;
+        $code();
+        enable_raw_mode()?;
+        execute!($terminal.backend_mut(), EnterAlternateScreen)?;
+        $terminal.hide_cursor()?;
+        $terminal.clear()?;
+    };
+}
