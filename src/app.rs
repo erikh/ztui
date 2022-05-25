@@ -96,6 +96,7 @@ impl App {
                 terminal.hide_cursor()?;
                 terminal.clear()?;
                 self.dialog = Dialog::None;
+                self.inputbuffer = String::new();
             }
 
             let last_tick = Instant::now();
