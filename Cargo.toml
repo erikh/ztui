@@ -17,5 +17,5 @@ reqwest = "*"
 serde_json = "*"
 serde = "*"
 directories = "*"
-bat = "*"
+bat = { version = "*", features = [ "minimal-application" ] }
 byte-unit = "*"
