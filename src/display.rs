@@ -1,4 +1,4 @@
-use std::{collections::HashSet, time::Instant};
+use std::collections::HashSet;
 
 use tui::{
     backend::Backend,
