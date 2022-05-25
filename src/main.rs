@@ -1,14 +1,11 @@
-use crossterm::{
-    execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-};
-use tui::{backend::CrosstermBackend, Terminal};
+use crate::terminal::deinit_terminal;
 
 mod app;
 mod client;
 mod config;
 mod display;
 mod nets;
+mod terminal;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
@@ -16,12 +13,7 @@ async fn main() -> Result<(), anyhow::Error> {
         "must be able to read the authtoken.secret file in the zerotier configuration directory",
     );
 
-    enable_raw_mode()?;
-    let mut stdout = std::io::stdout();
-    execute!(stdout, EnterAlternateScreen)?;
-    let backend = CrosstermBackend::new(stdout);
-
-    let mut terminal = Terminal::new(backend)?;
+    let mut terminal = terminal::init_terminal()?;
     let mut app = app::App::default();
 
     let networks_file = std::fs::read_to_string(config::config_path()).unwrap_or("{}".to_string());
@@ -37,9 +29,7 @@ async fn main() -> Result<(), anyhow::Error> {
         serde_json::to_string(&app.savednetworks.clone())?,
     )?;
 
-    disable_raw_mode()?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
-    terminal.show_cursor()?;
+    deinit_terminal(terminal)?;
 
     if let Err(err) = res {
         println!("{}", err);
