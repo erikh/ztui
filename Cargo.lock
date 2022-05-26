@@ -183,7 +183,7 @@ dependencies = [
  "num-integer",
  "num-traits",
  "serde",
- "time",
+ "time 0.1.43",
  "winapi",
 ]
 
@@ -419,6 +419,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9852635589dc9f9ea1b6fe9f05b50ef208c85c834a562f0c6abb1c475736ec2b"
 dependencies = [
  "cfg-if",
+]
+
+[[package]]
+name = "fancy-duration"
+version = "0.1.0"
+dependencies = [
+ "time 0.3.9",
 ]
 
 [[package]]
@@ -958,6 +965,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "19e64526ebdee182341572e50e9ad03965aa510cd94427a4549448f285e957a1"
 dependencies = [
  "hermit-abi",
+ "libc",
+]
+
+[[package]]
+name = "num_threads"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2819ce041d2ee131036f4fc9d6ae7ae125a3a40e97ba64d04fe799ad9dabbb44"
+dependencies = [
  "libc",
 ]
 
@@ -1767,6 +1783,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "time"
+version = "0.3.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c2702e08a7a860f005826c6815dcac101b19b5eb330c27fe4a5928fec1d20ddd"
+dependencies = [
+ "libc",
+ "num_threads",
+]
+
+[[package]]
 name = "tinyvec"
 version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2260,6 +2286,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "zerotier-central-api"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a0ba5b7104ad0ac89d5c4a7f6f371a8ffaf0bee6da4e34ca6b41799b74793301"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "futures",
+ "progenitor",
+ "progenitor-client",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "uuid",
+]
+
+[[package]]
 name = "zerotier-one-api"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2285,14 +2328,18 @@ dependencies = [
  "byte-unit",
  "crossterm",
  "directories",
+ "fancy-duration",
  "http",
+ "lazy_static",
  "libc",
  "portable-pty",
  "reqwest",
  "serde",
  "serde_json",
  "sys_metrics",
+ "time 0.3.9",
  "tokio",
  "tui",
+ "zerotier-central-api",
  "zerotier-one-api",
 ]

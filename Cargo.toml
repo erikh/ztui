@@ -12,6 +12,7 @@ crossterm = "*"
 tui = "*"
 anyhow = "*"
 zerotier-one-api = "*"
+zerotier-central-api = "*"
 http = "*"
 reqwest = "*"
 serde_json = "*"
@@ -21,3 +22,6 @@ bat = { version = "*", default-features = false, features = [ "minimal-applicati
 byte-unit = "*"
 portable-pty = "*"
 libc = "*"
+fancy-duration = { version = "*", path = "../fancy-duration" }
+time = { version = "^0.3", features = [ "local-offset" ] }
+lazy_static = "*"

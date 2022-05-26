@@ -6,7 +6,28 @@ use std::{
 use anyhow::anyhow;
 use http::{HeaderMap, HeaderValue};
 use tokio::sync::mpsc;
+use zerotier_central_api::{types::Member, Client};
 use zerotier_one_api::types::Network;
+
+// address of Central
+const CENTRAL_BASEURL: &str = "https://my.zerotier.com/api/v1";
+
+// this provides the production configuration for talking to central through the openapi libraries.
+pub fn central_client(token: String) -> Result<zerotier_central_api::Client, anyhow::Error> {
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        "Authorization",
+        HeaderValue::from_str(&format!("bearer {}", token))?,
+    );
+
+    Ok(zerotier_central_api::Client::new_with_client(
+        &std::env::var("ZEROTIER_CENTRAL_INSTANCE").unwrap_or(CENTRAL_BASEURL.to_string()),
+        reqwest::Client::builder()
+            .https_only(true)
+            .default_headers(headers)
+            .build()?,
+    ))
+}
 
 // determine the path of the authtoken.secret
 pub fn authtoken_path(arg: Option<&Path>) -> &Path {
@@ -121,4 +142,34 @@ pub fn sync_get_networks() -> Result<Vec<Network>, anyhow::Error> {
     }
 
     Ok(networks)
+}
+
+pub fn sync_get_members(client: Client, id: String) -> Result<Vec<Member>, anyhow::Error> {
+    let (s, mut r) = mpsc::unbounded_channel();
+
+    tokio::spawn(async move { s.send(client.get_network_member_list(&id).await).unwrap() });
+
+    let members: Vec<Member>;
+
+    let timeout = Instant::now();
+
+    'outer: loop {
+        match r.try_recv() {
+            Ok(m) => match m {
+                Ok(m) => {
+                    members = m.to_vec();
+                    break 'outer;
+                }
+                Err(e) => return Err(anyhow!(e)),
+            },
+
+            Err(_) => std::thread::sleep(Duration::new(0, 10)),
+        }
+
+        if timeout.elapsed() > Duration::new(3, 0) {
+            return Err(anyhow!("timeout reading from zerotier"));
+        }
+    }
+
+    Ok(members)
 }

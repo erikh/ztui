@@ -15,12 +15,14 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tui::{
     backend::{Backend, CrosstermBackend},
-    widgets::{ListItem, ListState},
+    layout::Rect,
+    style::{Color, Style},
+    text::{Span, Spans},
+    widgets::{Clear, ListState, Paragraph},
     Frame, Terminal,
 };
-use zerotier_one_api::types::Network;
 
-use crate::config::Settings;
+use crate::{client::central_client, config::Settings};
 
 pub const STATUS_DISCONNECTED: &str = "DISCONNECTED";
 
@@ -42,6 +44,13 @@ pub enum Dialog {
     Join,
     Config,
     Help,
+    APIKey(String),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum Page {
+    Networks,
+    Network(String),
 }
 
 #[derive(Debug, Clone)]
@@ -50,20 +59,20 @@ pub struct App {
     pub settings: Settings,
     pub dialog: Dialog,
     pub inputbuffer: String,
-    pub listitems: Vec<ListItem<'static>>,
     pub liststate: ListState,
     pub last_usage: HashMap<String, Vec<(u128, u128, Instant)>>,
+    pub page: Page,
 }
 
 impl Default for App {
     fn default() -> Self {
         Self {
+            page: Page::Networks,
             settings: Settings::default(),
             dialog: Dialog::None,
             editing_mode: EditingMode::Command,
             inputbuffer: String::new(),
             last_usage: HashMap::new(),
-            listitems: Vec::new(),
             liststate: ListState::default(),
         }
     }
@@ -76,9 +85,6 @@ impl App {
     ) -> Result<(), anyhow::Error> {
         terminal.clear()?;
         loop {
-            let networks = crate::client::sync_get_networks()?;
-            self.settings.nets.refresh()?;
-
             if let Dialog::Config = self.dialog {
                 crate::temp_mute_terminal!(terminal, {
                     PrettyPrinter::new()
@@ -93,10 +99,10 @@ impl App {
 
             let last_tick = Instant::now();
             terminal.draw(|f| {
-                self.draw(f, networks).unwrap();
+                self.draw(f).unwrap();
             })?;
 
-            let timeout = Duration::new(1, 0)
+            let timeout = Duration::new(5, 0)
                 .checked_sub(last_tick.elapsed())
                 .unwrap_or_else(|| Duration::from_secs(0));
             if crossterm::event::poll(timeout)? {
@@ -107,14 +113,66 @@ impl App {
         }
     }
 
-    fn draw<B: Backend>(
-        &mut self,
-        f: &mut Frame<'_, B>,
-        networks: Vec<Network>,
-    ) -> Result<(), anyhow::Error> {
-        crate::display::display_networks(f, self, networks)?;
-        crate::display::display_dialogs(f, self)?;
+    fn set_dialog_api_key(&mut self, id: String) {
+        self.page = Page::Networks;
+        self.dialog = Dialog::APIKey(id);
+        self.editing_mode = EditingMode::Editing;
+        self.inputbuffer = String::new();
+    }
 
+    fn show_error<B: Backend>(&self, f: &mut Frame<'_, B>, mut message: String) {
+        let size = f.size();
+        message.truncate(size.width as usize - 10);
+        let span = Spans::from(vec![Span::styled(
+            format!("[ {} ]", message),
+            Style::default().fg(Color::LightRed),
+        )]);
+
+        let rect = Rect::new(
+            size.width - span.width() as u16 - 2,
+            size.height - 1,
+            span.width() as u16,
+            1,
+        );
+        f.render_widget(Clear, rect);
+        f.render_widget(Paragraph::new(span), rect);
+    }
+
+    fn draw<B: Backend>(&mut self, f: &mut Frame<'_, B>) -> Result<(), anyhow::Error> {
+        match self.page.clone() {
+            Page::Networks => {
+                let networks = crate::client::sync_get_networks()?;
+                self.settings.nets.refresh()?;
+
+                crate::display::display_networks(f, self, networks)?;
+            }
+            Page::Network(id) => {
+                if let Some(key) = self.settings.api_key_for_id(id.clone()) {
+                    let client = central_client(key.to_string())?;
+                    match crate::client::sync_get_members(client, id.clone()) {
+                        Ok(members) => {
+                            crate::display::display_network(f, self, members)?;
+                        }
+                        Err(e) => {
+                            // order is very important here, the recursive draw call must happen
+                            // before the error show call otherwise the error doesn't show.
+                            // however, if you misorder draw and the set_dialog_api_key call you
+                            // will enter an infinite loop.
+                            self.set_dialog_api_key(id.clone());
+                            self.draw(f)?;
+                            self.show_error(
+                                f,
+                                format!("Invalid API Key for Network ({}): {}", id, e),
+                            );
+                        }
+                    }
+                } else {
+                    self.set_dialog_api_key(id);
+                }
+            }
+        }
+
+        crate::display::display_dialogs(f, self)?;
         Ok(())
     }
 
@@ -140,79 +198,118 @@ impl App {
         terminal: &mut Terminal<CrosstermBackend<W>>,
         key: KeyEvent,
     ) -> Result<bool, anyhow::Error> {
-        match key.code {
-            KeyCode::Up => {
-                if let Some(pos) = self.liststate.selected() {
-                    if pos > 0 {
-                        self.liststate.select(Some(pos - 1));
+        match &self.page {
+            Page::Network(_) => match key.code {
+                KeyCode::Esc => {
+                    self.dialog = Dialog::None;
+                    self.editing_mode = EditingMode::Command;
+                }
+                KeyCode::Char(c) => match c {
+                    'q' => {
+                        self.page = Page::Networks;
+                        self.dialog = Dialog::None;
+                        self.editing_mode = EditingMode::Command;
                     }
-                }
-            }
-            KeyCode::Down => {
-                let pos = self.liststate.selected().unwrap_or_default() + 1;
-                if pos < self.listitems.len() {
-                    self.liststate.select(Some(pos))
-                }
-            }
-            KeyCode::Esc => {
-                self.dialog = Dialog::None;
-                self.editing_mode = EditingMode::Command;
-            }
-            KeyCode::Char(c) => match c {
-                'q' => return Ok(true),
-                'd' => {
-                    let pos = self.liststate.selected().unwrap_or_default();
-                    self.settings.remove_network(pos);
-                }
-                'l' => {
-                    let pos = self.liststate.selected().unwrap_or_default();
-                    let id = self.settings.get_network_id_by_pos(pos);
-                    tokio::spawn(crate::client::leave_network(id));
-                }
-                'j' => {
-                    let pos = self.liststate.selected().unwrap_or_default();
-                    let id = self.settings.get_network_id_by_pos(pos);
-                    tokio::spawn(crate::client::join_network(id));
-                }
-                'J' => {
-                    self.dialog = Dialog::Join;
-                    self.editing_mode = EditingMode::Editing;
-                    self.inputbuffer = String::new();
-                }
-                'c' => {
-                    self.inputbuffer = serde_json::to_string_pretty(
-                        &self
-                            .settings
-                            .get_network_by_pos(self.liststate.selected().unwrap_or_default()),
-                    )?;
-                    self.dialog = Dialog::Config;
-                }
-                't' => self.settings.set_filter(match self.settings.filter() {
-                    ListFilter::None => ListFilter::Connected,
-                    ListFilter::Connected => ListFilter::None,
-                }),
-                'h' => {
-                    self.dialog = match self.dialog {
-                        Dialog::Help => Dialog::None,
-                        _ => Dialog::Help,
+                    'h' => {
+                        self.dialog = match self.dialog {
+                            Dialog::Help => Dialog::None,
+                            _ => Dialog::Help,
+                        }
                     }
-                }
-                x => {
-                    if let Some(net) = self
-                        .settings
-                        .get_network_by_pos(self.liststate.selected().unwrap_or_default())
-                    {
-                        if let Some(s) = self
-                            .settings
-                            .user_config()
-                            .command_for(x, net.subtype_1.port_device_name.clone().unwrap())
-                        {
-                            App::run_command(terminal, s)?;
+                    _ => {}
+                },
+                _ => {}
+            },
+            Page::Networks => match key.code {
+                KeyCode::Up => {
+                    if let Some(pos) = self.liststate.selected() {
+                        if pos > 0 {
+                            self.liststate.select(Some(pos - 1));
                         }
                     }
                 }
+                KeyCode::Down => {
+                    let pos = self.liststate.selected().unwrap_or_default() + 1;
+                    if pos < self.settings.network_count() {
+                        self.liststate.select(Some(pos))
+                    }
+                }
+                KeyCode::Esc => {
+                    self.dialog = Dialog::None;
+                    self.editing_mode = EditingMode::Command;
+                }
+                KeyCode::Char(c) => match c {
+                    'q' => return Ok(true),
+                    'd' => {
+                        let pos = self.liststate.selected().unwrap_or_default();
+                        self.settings.remove_network(pos);
+                    }
+                    'l' => {
+                        let pos = self.liststate.selected().unwrap_or_default();
+                        let id = self.settings.get_network_id_by_pos(pos);
+                        tokio::spawn(crate::client::leave_network(id));
+                    }
+                    'j' => {
+                        let pos = self.liststate.selected().unwrap_or_default();
+                        let id = self.settings.get_network_id_by_pos(pos);
+                        tokio::spawn(crate::client::join_network(id));
+                    }
+                    'J' => {
+                        self.dialog = Dialog::Join;
+                        self.editing_mode = EditingMode::Editing;
+                        self.inputbuffer = String::new();
+                    }
+                    'c' => {
+                        self.inputbuffer =
+                            serde_json::to_string_pretty(&self.settings.get_network_by_pos(
+                                self.liststate.selected().unwrap_or_default(),
+                            ))?;
+                        self.dialog = Dialog::Config;
+                    }
+                    't' => {
+                        self.settings.set_filter(match self.settings.filter() {
+                            ListFilter::None => ListFilter::Connected,
+                            ListFilter::Connected => ListFilter::None,
+                        });
+
+                        self.liststate.select(Some(0));
+                    }
+                    'h' => {
+                        self.dialog = match self.dialog {
+                            Dialog::Help => Dialog::None,
+                            _ => Dialog::Help,
+                        }
+                    }
+                    's' => {
+                        let id = self
+                            .settings
+                            .get_network_id_by_pos(self.liststate.selected().unwrap_or_default());
+                        let key = self.settings.api_key_for_id(id.clone());
+                        if let Some(_) = key {
+                            self.page = Page::Network(id)
+                        } else {
+                            self.dialog = Dialog::APIKey(id);
+                            self.editing_mode = EditingMode::Editing;
+                            self.inputbuffer = String::new();
+                        }
+                    }
+                    x => {
+                        if let Some(net) = self
+                            .settings
+                            .get_network_by_pos(self.liststate.selected().unwrap_or_default())
+                        {
+                            if let Some(s) = self
+                                .settings
+                                .user_config()
+                                .command_for(x, net.subtype_1.port_device_name.clone().unwrap())
+                            {
+                                App::run_command(terminal, s)?;
+                            }
+                        }
+                    }
+                },
+                _ => {}
             },
-            _ => {}
         }
 
         Ok(false)
@@ -239,7 +336,18 @@ impl App {
                 }
             }
             KeyCode::Enter => {
-                tokio::spawn(crate::client::join_network(self.inputbuffer.clone()));
+                match &self.dialog {
+                    Dialog::Join => {
+                        tokio::spawn(crate::client::join_network(self.inputbuffer.clone()));
+                    }
+                    Dialog::APIKey(id) => {
+                        self.settings
+                            .set_api_key_for_id(id.clone(), self.inputbuffer.clone());
+                        self.page = Page::Network(id.clone());
+                    }
+                    _ => {}
+                }
+
                 self.inputbuffer = String::new();
                 self.dialog = Dialog::None;
                 self.editing_mode = EditingMode::Command;

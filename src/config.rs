@@ -53,6 +53,7 @@ impl Default for UserConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
+    api_keys: HashMap<String, String>,
     savednetworks: HashMap<String, Network>,
     savednetworksidx: Vec<String>,
     filter: ListFilter,
@@ -65,6 +66,7 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
+            api_keys: HashMap::new(),
             user_config: UserConfig::default(),
             filter: ListFilter::None,
             savednetworks: HashMap::new(),
@@ -104,6 +106,10 @@ impl Settings {
 
     pub fn filter(&self) -> ListFilter {
         self.filter.clone()
+    }
+
+    pub fn network_count(&self) -> usize {
+        self.savednetworksidx.len()
     }
 
     pub fn update_networks(&mut self, networks: Vec<Network>) -> Result<bool, anyhow::Error> {
@@ -163,5 +169,13 @@ impl Settings {
 
     pub fn idx_iter(&self) -> impl Iterator<Item = &String> {
         self.savednetworksidx.iter()
+    }
+
+    pub fn api_key_for_id(&self, id: String) -> Option<&String> {
+        self.api_keys.get(&id)
+    }
+
+    pub fn set_api_key_for_id(&mut self, id: String, api_key: String) {
+        self.api_keys.insert(id, api_key);
     }
 }
