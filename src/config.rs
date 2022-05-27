@@ -139,7 +139,7 @@ impl Settings {
             }
 
             self.nets
-                .store_usage(network.subtype_1.port_device_name.clone().unwrap())?;
+                .store_usage(network.subtype_1.port_device_name.clone().unwrap());
         }
 
         Ok(new)

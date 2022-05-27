@@ -41,7 +41,7 @@ impl Nets {
         None
     }
 
-    pub fn store_usage(&mut self, interface: String) -> Result<(), anyhow::Error> {
+    pub fn store_usage(&mut self, interface: String) {
         if let Some(net) = self.find_by_interface(interface.clone()) {
             if let Some(v) = self.last_usage.get_mut(&interface) {
                 v.push((net.rx_bytes as u128, net.tx_bytes as u128, Instant::now()));
@@ -59,10 +59,6 @@ impl Nets {
                     vec![(net.rx_bytes as u128, net.tx_bytes as u128, Instant::now())],
                 );
             }
-
-            Ok(())
-        } else {
-            Err(anyhow!("invalid interface '{}'", interface))
         }
     }
 
