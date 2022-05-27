@@ -291,6 +291,7 @@ static ref HELP_TEXT: Vec<Vec<[&'static str; 2]>> = vec![
         ["J", "Join a network by address"],
         ["c", "review network settings"],
         ["t", "toggle disconnected in list"],
+        ["s", "show network members (requires API key)"],
     ],
     vec![
         ["Up/Down", "Navigate the List"],
