@@ -163,10 +163,6 @@ impl Settings {
         self.savednetworks.get(id)
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (&String, &Network)> {
-        self.savednetworks.iter()
-    }
-
     pub fn idx_iter(&self) -> impl Iterator<Item = &String> {
         self.savednetworksidx.iter()
     }

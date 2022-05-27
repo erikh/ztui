@@ -5,66 +5,14 @@ use tui::{
     backend::Backend,
     layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
-    text::{Span, Spans},
-    widgets::{Block, Borders, Cell, Clear, List, ListItem, ListState, Paragraph, Row, Table},
+    text::Span,
+    widgets::{Block, Borders, Cell, Clear, Paragraph, Row, Table, TableState},
     Frame,
 };
 use zerotier_central_api::types::Member;
 use zerotier_one_api::types::Network;
 
 use crate::app::{App, Dialog, ListFilter, Page, STATUS_DISCONNECTED};
-
-macro_rules! filter_disconnected {
-    ($app:expr, $val:block) => {
-        $app.settings
-            .iter()
-            .filter_map(|(_, v)| {
-                if let ListFilter::Connected = $app.settings.filter() {
-                    if v.subtype_1.status.clone().unwrap() != STATUS_DISCONNECTED {
-                        Some($val(v))
-                    } else {
-                        None
-                    }
-                } else {
-                    Some($val(v))
-                }
-            })
-            .collect::<Vec<String>>()
-    };
-}
-
-macro_rules! get_space_offset {
-    ($mapped:expr, $var:expr, $map:block) => {
-        " ".repeat(
-            1 + get_max_len(
-                $mapped
-                    .clone()
-                    .iter()
-                    .filter_map($map)
-                    .collect::<Vec<String>>(),
-            ) - $var.len(),
-        )
-    };
-}
-
-fn get_max_len(strs: Vec<String>) -> usize {
-    strs.iter()
-        .max_by(|k, k2| {
-            if k.len() > k2.len() {
-                std::cmp::Ordering::Greater
-            } else {
-                std::cmp::Ordering::Less
-            }
-        })
-        .unwrap()
-        .len()
-}
-
-fn get_max_savednetworks(app: App) -> usize {
-    get_max_len(filter_disconnected!(app, {
-        |v: &Network| v.subtype_1.name.clone().unwrap()
-    }))
-}
 
 fn dialog<B: Backend>(f: &mut Frame<B>, app: &mut App, margin: u16, help_text: String) {
     let w = f.size().width;
@@ -193,7 +141,7 @@ pub fn display_networks<B: Backend>(
 
     let new = app.settings.update_networks(networks)?;
 
-    let listitems = app
+    let rows = app
         .settings
         .idx_iter()
         .filter_map(|k| {
@@ -205,18 +153,16 @@ pub fn display_networks<B: Backend>(
                 }
             }
 
-            Some(ListItem::new(Spans::from(vec![
-                Span::styled(k.clone(), Style::default().fg(Color::LightCyan)),
-                Span::raw(" "),
-                Span::styled(
+            Some(Row::new(vec![
+                Cell::from(Span::styled(
+                    k.clone(),
+                    Style::default().fg(Color::LightCyan),
+                )),
+                Cell::from(Span::styled(
                     v.subtype_1.name.clone().unwrap_or_default(),
                     Style::default().fg(Color::Cyan),
-                ),
-                Span::raw(" ".repeat(
-                    1 + get_max_savednetworks(app.clone())
-                        - v.subtype_1.name.clone().unwrap_or_default().len(),
                 )),
-                Span::styled(
+                Cell::from(Span::styled(
                     v.subtype_1.status.clone().unwrap(),
                     Style::default().fg(match v.subtype_1.status.clone().unwrap().as_str() {
                         "OK" => Color::LightGreen,
@@ -224,34 +170,12 @@ pub fn display_networks<B: Backend>(
                         STATUS_DISCONNECTED => Color::LightRed,
                         _ => Color::LightRed,
                     }),
-                ),
-                Span::raw(get_space_offset!(
-                    app.settings,
-                    v.subtype_1.status.clone().unwrap_or_default(),
-                    {
-                        |(_, v2)| {
-                            if let ListFilter::Connected = app.settings.filter() {
-                                if v2.subtype_1.status.clone().unwrap() == STATUS_DISCONNECTED {
-                                    None
-                                } else {
-                                    Some(v2.subtype_1.status.clone().unwrap_or_default())
-                                }
-                            } else {
-                                Some(v2.subtype_1.status.clone().unwrap_or_default())
-                            }
-                        }
-                    }
                 )),
-                Span::styled(
+                Cell::from(Span::styled(
                     v.subtype_1.assigned_addresses.join(", "),
                     Style::default().fg(Color::LightGreen),
-                ),
-                Span::raw(get_space_offset!(
-                    app.settings,
-                    v.subtype_1.assigned_addresses.join(", "),
-                    { |(_, v2)| Some(v2.subtype_1.assigned_addresses.join(", ")) }
                 )),
-                Span::styled(
+                Cell::from(Span::styled(
                     if let Some(s) = app
                         .settings
                         .nets
@@ -263,25 +187,32 @@ pub fn display_networks<B: Backend>(
                         "".to_string()
                     },
                     Style::default().fg(Color::LightMagenta),
-                ),
-            ])))
+                )),
+            ]))
         })
-        .collect::<Vec<ListItem>>();
+        .collect::<Vec<Row>>();
 
     if new {
-        app.liststate = ListState::default();
+        app.network_state = TableState::default();
     }
 
-    if app.liststate.selected().is_none() && listitems.len() > 0 {
-        app.liststate.select(Some(0));
+    if app.network_state.selected().is_none() && rows.len() > 0 {
+        app.network_state.select(Some(0));
     }
 
-    let listview = List::new(listitems)
+    let table = Table::new(rows)
         .block(titleblock)
+        .widths(&[
+            Constraint::Length(16),
+            Constraint::Length(20),
+            Constraint::Length(15),
+            Constraint::Length(20),
+            Constraint::Length(35),
+        ])
         .highlight_style(Style::default().add_modifier(Modifier::BOLD))
         .highlight_symbol("> ");
 
-    f.render_stateful_widget(listview, list[0], &mut app.liststate);
+    f.render_stateful_widget(table, list[0], &mut app.network_state);
     Ok(())
 }
 

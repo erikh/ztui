@@ -18,7 +18,7 @@ use tui::{
     layout::Rect,
     style::{Color, Modifier, Style},
     text::{Span, Spans},
-    widgets::{Clear, ListState, Paragraph, TableState},
+    widgets::{Clear, Paragraph, TableState},
     Frame, Terminal,
 };
 
@@ -59,7 +59,7 @@ pub struct App {
     pub settings: Settings,
     pub dialog: Dialog,
     pub inputbuffer: String,
-    pub liststate: ListState,
+    pub network_state: TableState,
     pub last_usage: HashMap<String, Vec<(u128, u128, Instant)>>,
     pub page: Page,
     pub member_count: usize,
@@ -75,7 +75,7 @@ impl Default for App {
             editing_mode: EditingMode::Command,
             inputbuffer: String::new(),
             last_usage: HashMap::new(),
-            liststate: ListState::default(),
+            network_state: TableState::default(),
             member_count: 0,
             member_state: TableState::default(),
         }
@@ -242,16 +242,16 @@ impl App {
             },
             Page::Networks => match key.code {
                 KeyCode::Up => {
-                    if let Some(pos) = self.liststate.selected() {
+                    if let Some(pos) = self.network_state.selected() {
                         if pos > 0 {
-                            self.liststate.select(Some(pos - 1));
+                            self.network_state.select(Some(pos - 1));
                         }
                     }
                 }
                 KeyCode::Down => {
-                    let pos = self.liststate.selected().unwrap_or_default() + 1;
+                    let pos = self.network_state.selected().unwrap_or_default() + 1;
                     if pos < self.settings.network_count() {
-                        self.liststate.select(Some(pos))
+                        self.network_state.select(Some(pos))
                     }
                 }
                 KeyCode::Esc => {
@@ -261,16 +261,16 @@ impl App {
                 KeyCode::Char(c) => match c {
                     'q' => return Ok(true),
                     'd' => {
-                        let pos = self.liststate.selected().unwrap_or_default();
+                        let pos = self.network_state.selected().unwrap_or_default();
                         self.settings.remove_network(pos);
                     }
                     'l' => {
-                        let pos = self.liststate.selected().unwrap_or_default();
+                        let pos = self.network_state.selected().unwrap_or_default();
                         let id = self.settings.get_network_id_by_pos(pos);
                         tokio::spawn(crate::client::leave_network(id));
                     }
                     'j' => {
-                        let pos = self.liststate.selected().unwrap_or_default();
+                        let pos = self.network_state.selected().unwrap_or_default();
                         let id = self.settings.get_network_id_by_pos(pos);
                         tokio::spawn(crate::client::join_network(id));
                     }
@@ -282,7 +282,7 @@ impl App {
                     'c' => {
                         self.inputbuffer =
                             serde_json::to_string_pretty(&self.settings.get_network_by_pos(
-                                self.liststate.selected().unwrap_or_default(),
+                                self.network_state.selected().unwrap_or_default(),
                             ))?;
                         self.dialog = Dialog::Config;
                     }
@@ -292,7 +292,7 @@ impl App {
                             ListFilter::Connected => ListFilter::None,
                         });
 
-                        self.liststate.select(Some(0));
+                        self.network_state.select(Some(0));
                     }
                     'h' => {
                         self.dialog = match self.dialog {
@@ -301,9 +301,9 @@ impl App {
                         }
                     }
                     's' => {
-                        let id = self
-                            .settings
-                            .get_network_id_by_pos(self.liststate.selected().unwrap_or_default());
+                        let id = self.settings.get_network_id_by_pos(
+                            self.network_state.selected().unwrap_or_default(),
+                        );
                         let key = self.settings.api_key_for_id(id.clone());
                         if let Some(_) = key {
                             self.member_state.select(Some(0));
@@ -317,7 +317,7 @@ impl App {
                     x => {
                         if let Some(net) = self
                             .settings
-                            .get_network_by_pos(self.liststate.selected().unwrap_or_default())
+                            .get_network_by_pos(self.network_state.selected().unwrap_or_default())
                         {
                             if let Some(s) = self
                                 .settings
