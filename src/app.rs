@@ -16,7 +16,7 @@ use tokio::sync::mpsc;
 use tui::{
     backend::{Backend, CrosstermBackend},
     layout::Rect,
-    style::{Color, Style},
+    style::{Color, Modifier, Style},
     text::{Span, Spans},
     widgets::{Clear, ListState, Paragraph},
     Frame, Terminal,
@@ -125,7 +125,9 @@ impl App {
         message.truncate(size.width as usize - 10);
         let span = Spans::from(vec![Span::styled(
             format!("[ {} ]", message),
-            Style::default().fg(Color::LightRed),
+            Style::default()
+                .fg(Color::LightRed)
+                .add_modifier(Modifier::BOLD),
         )]);
 
         let rect = Rect::new(
