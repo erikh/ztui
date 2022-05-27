@@ -133,20 +133,19 @@ pub fn display_network<B: Backend>(
         .borders(Borders::ALL)
         .title("[ ZeroTier Terminal UI | Press h for Help ]");
 
-    let listitems = members
+    let rows = members
         .iter()
         .map(|m| {
-            ListItem::new(Spans::from(vec![
-                Span::styled(m.node_id.clone().unwrap(), Style::default().fg(Color::Cyan)),
-                Span::raw(" "),
-                Span::styled(
+            Row::new(vec![
+                Cell::from(Span::styled(
+                    m.node_id.clone().unwrap(),
+                    Style::default().fg(Color::Cyan),
+                )),
+                Cell::from(Span::styled(
                     m.name.clone().unwrap(),
                     Style::default().fg(Color::LightCyan),
-                ),
-                Span::raw(get_space_offset!(members, m.name.clone().unwrap(), {
-                    |m| Some(m.name.clone().unwrap())
-                })),
-                Span::styled(
+                )),
+                Cell::from(Span::styled(
                     format!(
                         "{}",
                         fancy_duration::FancyDuration::new(
@@ -158,17 +157,24 @@ pub fn display_network<B: Backend>(
                         .to_string()
                     ),
                     Style::default().fg(Color::LightCyan),
-                ),
-            ]))
+                )),
+            ])
         })
-        .collect::<Vec<ListItem>>();
+        .collect::<Vec<Row>>();
 
-    let listview = List::new(listitems)
+    app.member_count = rows.len();
+
+    let table = Table::new(rows)
         .block(titleblock)
+        .widths(&[
+            Constraint::Length(12),
+            Constraint::Length(20),
+            Constraint::Length(25),
+        ])
         .highlight_style(Style::default().add_modifier(Modifier::BOLD))
         .highlight_symbol("> ");
 
-    f.render_stateful_widget(listview, list[0], &mut app.liststate);
+    f.render_stateful_widget(table, list[0], &mut app.member_state);
     Ok(())
 }
 

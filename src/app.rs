@@ -18,7 +18,7 @@ use tui::{
     layout::Rect,
     style::{Color, Modifier, Style},
     text::{Span, Spans},
-    widgets::{Clear, ListState, Paragraph},
+    widgets::{Clear, ListState, Paragraph, TableState},
     Frame, Terminal,
 };
 
@@ -62,6 +62,8 @@ pub struct App {
     pub liststate: ListState,
     pub last_usage: HashMap<String, Vec<(u128, u128, Instant)>>,
     pub page: Page,
+    pub member_count: usize,
+    pub member_state: TableState,
 }
 
 impl Default for App {
@@ -74,6 +76,8 @@ impl Default for App {
             inputbuffer: String::new(),
             last_usage: HashMap::new(),
             liststate: ListState::default(),
+            member_count: 0,
+            member_state: TableState::default(),
         }
     }
 }
@@ -84,6 +88,7 @@ impl App {
         terminal: &mut Terminal<CrosstermBackend<W>>,
     ) -> Result<(), anyhow::Error> {
         terminal.clear()?;
+
         loop {
             if let Dialog::Config = self.dialog {
                 crate::temp_mute_terminal!(terminal, {
@@ -202,6 +207,19 @@ impl App {
     ) -> Result<bool, anyhow::Error> {
         match &self.page {
             Page::Network(_) => match key.code {
+                KeyCode::Up => {
+                    if let Some(pos) = self.member_state.selected() {
+                        if pos > 0 {
+                            self.member_state.select(Some(pos - 1));
+                        }
+                    }
+                }
+                KeyCode::Down => {
+                    let pos = self.member_state.selected().unwrap_or_default() + 1;
+                    if pos < self.member_count {
+                        self.member_state.select(Some(pos))
+                    }
+                }
                 KeyCode::Esc => {
                     self.dialog = Dialog::None;
                     self.editing_mode = EditingMode::Command;
@@ -288,6 +306,7 @@ impl App {
                             .get_network_id_by_pos(self.liststate.selected().unwrap_or_default());
                         let key = self.settings.api_key_for_id(id.clone());
                         if let Some(_) = key {
+                            self.member_state.select(Some(0));
                             self.page = Page::Network(id)
                         } else {
                             self.dialog = Dialog::APIKey(id);

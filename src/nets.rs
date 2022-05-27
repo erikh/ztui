@@ -1,6 +1,5 @@
 use std::{collections::HashMap, time::Instant};
 
-use anyhow::anyhow;
 use sys_metrics::network::IoNet;
 
 #[derive(Clone, Debug)]
