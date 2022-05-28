@@ -33,9 +33,5 @@ async fn main() -> Result<(), anyhow::Error> {
     app.settings.to_file(config_path())?;
     deinit_terminal(terminal)?;
 
-    if let Err(err) = res {
-        println!("{}", err);
-    }
-
-    Ok(())
+    res
 }
