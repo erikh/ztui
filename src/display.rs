@@ -9,11 +9,10 @@ use tui::{
     layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
     text::Span,
-    widgets::{Block, Borders, Cell, Clear, Paragraph, Row, Table, TableState},
+    widgets::{Block, Borders, Cell, Clear, Paragraph, Row, Table},
     Frame,
 };
 use zerotier_central_api::types::Member;
-use zerotier_one_api::types::Network;
 
 use crate::{
     app::{App, Dialog, ListFilter, Page, STATUS_DISCONNECTED},
@@ -134,8 +133,7 @@ pub fn display_network<B: Backend>(
 
 pub fn display_networks<B: Backend>(
     f: &mut Frame<'_, B>,
-    app: &mut App,
-    networks: Vec<Network>,
+    _app: &mut App,
     settings: Arc<Mutex<Settings>>,
 ) -> Result<(), anyhow::Error> {
     let list = Layout::default()
@@ -147,7 +145,6 @@ pub fn display_networks<B: Backend>(
         .title("[ ZeroTier Terminal UI | Press h for Help ]");
 
     let mut lock = settings.lock().unwrap();
-    let new = lock.update_networks(networks)?;
 
     let rows = lock
         .idx_iter()
@@ -198,12 +195,8 @@ pub fn display_networks<B: Backend>(
         })
         .collect::<Vec<Row>>();
 
-    if new {
-        app.network_state = TableState::default();
-    }
-
-    if app.network_state.selected().is_none() && rows.len() > 0 {
-        app.network_state.select(Some(0));
+    if lock.network_state.selected().is_none() && rows.len() > 0 {
+        lock.network_state.select(Some(0));
     }
 
     let table = Table::new(rows)
@@ -218,7 +211,7 @@ pub fn display_networks<B: Backend>(
         .highlight_style(Style::default().add_modifier(Modifier::BOLD))
         .highlight_symbol("> ");
 
-    f.render_stateful_widget(table, list[0], &mut app.network_state);
+    f.render_stateful_widget(table, list[0], &mut lock.network_state);
     Ok(())
 }
 

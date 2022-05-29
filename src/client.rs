@@ -6,7 +6,7 @@ use std::{
 use anyhow::anyhow;
 use http::{HeaderMap, HeaderValue};
 use tokio::sync::mpsc;
-use zerotier_central_api::{types::Member, Client};
+use zerotier_central_api::{types::Member, Client, ResponseValue};
 use zerotier_one_api::types::Network;
 
 // address of Central
@@ -73,54 +73,99 @@ pub async fn get_networks(s: mpsc::UnboundedSender<Vec<Network>>) -> Result<(), 
     Ok(())
 }
 
-pub async fn leave_network(network_id: String) -> Result<(), anyhow::Error> {
-    let client = local_client_from_file(authtoken_path(None))?;
-    Ok(*client.delete_network(&network_id).await?)
+pub fn leave_network(network_id: String) -> Result<ResponseValue<()>, zerotier_one_api::Error> {
+    let t = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+
+    let (s, mut r) = mpsc::unbounded_channel();
+
+    t.spawn(async move {
+        let client = local_client_from_file(authtoken_path(None)).unwrap();
+        s.send(client.delete_network(&network_id).await).unwrap()
+    });
+
+    let res: Result<ResponseValue<()>, zerotier_one_api::Error>;
+
+    loop {
+        if let Ok(r) = r.try_recv() {
+            res = r;
+            break;
+        }
+    }
+
+    t.shutdown_background();
+    res
 }
 
-pub async fn join_network(network_id: String) -> Result<(), anyhow::Error> {
-    let client = local_client_from_file(authtoken_path(None))?;
-    client
-        .update_network(
-            &network_id,
-            &Network {
-                subtype_0: zerotier_one_api::types::NetworkSubtype0 {
-                    allow_default: None,
-                    allow_dns: None,
-                    allow_global: None,
-                    allow_managed: None,
-                },
-                subtype_1: zerotier_one_api::types::NetworkSubtype1 {
-                    allow_default: None,
-                    allow_dns: None,
-                    allow_global: None,
-                    allow_managed: None,
-                    assigned_addresses: Vec::new(),
-                    bridge: None,
-                    broadcast_enabled: None,
-                    dns: None,
-                    id: None,
-                    mac: None,
-                    mtu: None,
-                    multicast_subscriptions: Vec::new(),
-                    name: None,
-                    netconf_revision: None,
-                    port_device_name: None,
-                    port_error: None,
-                    routes: Vec::new(),
-                    status: None,
-                    type_: None,
-                },
-            },
+pub fn join_network(network_id: String) -> Result<ResponseValue<Network>, zerotier_one_api::Error> {
+    let t = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let (s, mut r) = mpsc::unbounded_channel();
+
+    t.spawn(async move {
+        let client = local_client_from_file(authtoken_path(None)).unwrap();
+        s.send(
+            client
+                .update_network(
+                    &network_id,
+                    &Network {
+                        subtype_0: zerotier_one_api::types::NetworkSubtype0 {
+                            allow_default: None,
+                            allow_dns: None,
+                            allow_global: None,
+                            allow_managed: None,
+                        },
+                        subtype_1: zerotier_one_api::types::NetworkSubtype1 {
+                            allow_default: None,
+                            allow_dns: None,
+                            allow_global: None,
+                            allow_managed: None,
+                            assigned_addresses: Vec::new(),
+                            bridge: None,
+                            broadcast_enabled: None,
+                            dns: None,
+                            id: None,
+                            mac: None,
+                            mtu: None,
+                            multicast_subscriptions: Vec::new(),
+                            name: None,
+                            netconf_revision: None,
+                            port_device_name: None,
+                            port_error: None,
+                            routes: Vec::new(),
+                            status: None,
+                            type_: None,
+                        },
+                    },
+                )
+                .await,
         )
-        .await?;
-    Ok(())
+    });
+
+    let res: Result<ResponseValue<Network>, zerotier_one_api::Error>;
+
+    loop {
+        if let Ok(r) = r.try_recv() {
+            res = r;
+            break;
+        }
+    }
+
+    t.shutdown_background();
+    res
 }
 
 pub fn sync_get_networks() -> Result<Vec<Network>, anyhow::Error> {
     let (s, mut r) = mpsc::unbounded_channel();
 
-    tokio::spawn(crate::client::get_networks(s));
+    let t = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?;
+    t.spawn(crate::client::get_networks(s));
 
     let networks: Vec<Network>;
 
@@ -141,6 +186,7 @@ pub fn sync_get_networks() -> Result<Vec<Network>, anyhow::Error> {
         }
     }
 
+    t.shutdown_background();
     Ok(networks)
 }
 

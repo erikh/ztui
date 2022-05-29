@@ -59,7 +59,6 @@ pub struct App {
     pub editing_mode: EditingMode,
     pub dialog: Dialog,
     pub inputbuffer: String,
-    pub network_state: TableState,
     pub last_usage: HashMap<String, Vec<(u128, u128, Instant)>>,
     pub page: Page,
     pub member_count: usize,
@@ -74,7 +73,6 @@ impl Default for App {
             editing_mode: EditingMode::Command,
             inputbuffer: String::new(),
             last_usage: HashMap::new(),
-            network_state: TableState::default(),
             member_count: 0,
             member_state: TableState::default(),
         }
@@ -108,7 +106,7 @@ impl App {
                 self.draw(f, s).unwrap();
             })?;
 
-            let timeout = Duration::new(5, 0)
+            let timeout = Duration::new(1, 0)
                 .checked_sub(last_tick.elapsed())
                 .unwrap_or_else(|| Duration::from_secs(0));
             if crossterm::event::poll(timeout)? {
@@ -153,10 +151,7 @@ impl App {
     ) -> Result<(), anyhow::Error> {
         match self.page.clone() {
             Page::Networks => {
-                let networks = crate::client::sync_get_networks()?;
-                settings.lock().unwrap().nets.refresh()?;
-
-                crate::display::display_networks(f, self, networks, settings.clone())?;
+                crate::display::display_networks(f, self, settings.clone())?;
             }
             Page::Network(id) => {
                 if let Some(key) = settings.lock().unwrap().api_key_for_id(id.clone()) {
@@ -212,6 +207,7 @@ impl App {
         settings: Arc<Mutex<Settings>>,
         key: KeyEvent,
     ) -> Result<bool, anyhow::Error> {
+        let mut lock = settings.lock().unwrap();
         match &self.page {
             Page::Network(_) => match key.code {
                 KeyCode::Up => {
@@ -247,104 +243,99 @@ impl App {
                 },
                 _ => {}
             },
-            Page::Networks => {
-                match key.code {
-                    KeyCode::Up => {
-                        if let Some(pos) = self.network_state.selected() {
-                            if pos > 0 {
-                                self.network_state.select(Some(pos - 1));
-                            }
+            Page::Networks => match key.code {
+                KeyCode::Up => {
+                    if let Some(pos) = lock.network_state.selected() {
+                        if pos > 0 {
+                            lock.network_state.select(Some(pos - 1));
                         }
                     }
-                    KeyCode::Down => {
-                        let pos = self.network_state.selected().unwrap_or_default() + 1;
-                        if pos < settings.lock().unwrap().network_count() {
-                            self.network_state.select(Some(pos))
+                }
+                KeyCode::Down => {
+                    let pos = lock.network_state.selected().unwrap_or_default() + 1;
+                    if pos < lock.network_count() {
+                        lock.network_state.select(Some(pos))
+                    }
+                }
+                KeyCode::Esc => {
+                    self.dialog = Dialog::None;
+                    self.editing_mode = EditingMode::Command;
+                }
+                KeyCode::Char(c) => match c {
+                    'q' => return Ok(true),
+                    'd' => {
+                        let pos = lock.network_state.selected().unwrap_or_default();
+                        lock.remove_network(pos);
+                    }
+                    'l' => {
+                        let pos = lock.network_state.selected().unwrap_or_default();
+                        let id = lock.get_network_id_by_pos(pos);
+                        crate::client::leave_network(id)?;
+                    }
+                    'j' => {
+                        let pos = lock.network_state.selected().unwrap_or_default();
+                        let id = lock.get_network_id_by_pos(pos);
+                        crate::client::join_network(id)?;
+                    }
+                    'J' => {
+                        self.dialog = Dialog::Join;
+                        self.editing_mode = EditingMode::Editing;
+                        self.inputbuffer = String::new();
+                    }
+                    'c' => {
+                        self.inputbuffer = serde_json::to_string_pretty(&lock.get_network_by_pos(
+                            lock.network_state.selected().unwrap_or_default(),
+                        ))?;
+                        self.dialog = Dialog::Config;
+                    }
+                    't' => {
+                        let filter = match lock.filter() {
+                            ListFilter::None => ListFilter::Connected,
+                            ListFilter::Connected => ListFilter::None,
+                        };
+
+                        lock.set_filter(filter);
+                        lock.network_state.select(Some(0));
+                    }
+                    'h' => {
+                        self.dialog = match self.dialog {
+                            Dialog::Help => Dialog::None,
+                            _ => Dialog::Help,
                         }
                     }
-                    KeyCode::Esc => {
-                        self.dialog = Dialog::None;
-                        self.editing_mode = EditingMode::Command;
-                    }
-                    KeyCode::Char(c) => match c {
-                        'q' => return Ok(true),
-                        'd' => {
-                            let pos = self.network_state.selected().unwrap_or_default();
-                            settings.lock().unwrap().remove_network(pos);
-                        }
-                        'l' => {
-                            let pos = self.network_state.selected().unwrap_or_default();
-                            let id = settings.lock().unwrap().get_network_id_by_pos(pos);
-                            tokio::spawn(crate::client::leave_network(id));
-                        }
-                        'j' => {
-                            let pos = self.network_state.selected().unwrap_or_default();
-                            let id = settings.lock().unwrap().get_network_id_by_pos(pos);
-                            tokio::spawn(crate::client::join_network(id));
-                        }
-                        'J' => {
-                            self.dialog = Dialog::Join;
+                    's' => {
+                        let lock = lock;
+
+                        let id = lock.get_network_id_by_pos(
+                            lock.network_state.selected().unwrap_or_default(),
+                        );
+                        let key = lock.api_key_for_id(id.clone());
+                        if let Some(_) = key {
+                            self.member_state.select(Some(0));
+                            self.page = Page::Network(id)
+                        } else {
+                            self.dialog = Dialog::APIKey(id);
                             self.editing_mode = EditingMode::Editing;
                             self.inputbuffer = String::new();
                         }
-                        'c' => {
-                            self.inputbuffer = serde_json::to_string_pretty(
-                                &settings.lock().unwrap().get_network_by_pos(
-                                    self.network_state.selected().unwrap_or_default(),
-                                ),
-                            )?;
-                            self.dialog = Dialog::Config;
-                        }
-                        't' => {
-                            settings.lock().unwrap().set_filter(
-                                match settings.lock().unwrap().filter() {
-                                    ListFilter::None => ListFilter::Connected,
-                                    ListFilter::Connected => ListFilter::None,
-                                },
-                            );
-
-                            self.network_state.select(Some(0));
-                        }
-                        'h' => {
-                            self.dialog = match self.dialog {
-                                Dialog::Help => Dialog::None,
-                                _ => Dialog::Help,
+                    }
+                    x => {
+                        if let Some(net) = lock
+                            .get_network_by_pos(lock.network_state.selected().unwrap_or_default())
+                        {
+                            if let Some(s) = settings
+                                .lock()
+                                .unwrap()
+                                .user_config()
+                                .command_for(x, net.subtype_1.port_device_name.clone().unwrap())
+                            {
+                                App::run_command(terminal, s)?;
                             }
                         }
-                        's' => {
-                            let lock = settings.lock().unwrap();
-
-                            let id = lock.get_network_id_by_pos(
-                                self.network_state.selected().unwrap_or_default(),
-                            );
-                            let key = lock.api_key_for_id(id.clone());
-                            if let Some(_) = key {
-                                self.member_state.select(Some(0));
-                                self.page = Page::Network(id)
-                            } else {
-                                self.dialog = Dialog::APIKey(id);
-                                self.editing_mode = EditingMode::Editing;
-                                self.inputbuffer = String::new();
-                            }
-                        }
-                        x => {
-                            if let Some(net) = settings.lock().unwrap().get_network_by_pos(
-                                self.network_state.selected().unwrap_or_default(),
-                            ) {
-                                if let Some(s) = settings
-                                    .lock()
-                                    .unwrap()
-                                    .user_config()
-                                    .command_for(x, net.subtype_1.port_device_name.clone().unwrap())
-                                {
-                                    App::run_command(terminal, s)?;
-                                }
-                            }
-                        }
-                    },
-                    _ => {}
-                }
-            }
+                    }
+                },
+                _ => {}
+            },
         }
 
         Ok(false)
@@ -374,7 +365,7 @@ impl App {
             KeyCode::Enter => {
                 match &self.dialog {
                     Dialog::Join => {
-                        tokio::spawn(crate::client::join_network(self.inputbuffer.clone()));
+                        crate::client::join_network(self.inputbuffer.clone()).unwrap();
                     }
                     Dialog::APIKey(id) => {
                         settings

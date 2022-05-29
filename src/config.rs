@@ -4,6 +4,7 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
+use tui::widgets::TableState;
 use zerotier_one_api::types::Network;
 
 use crate::{app::ListFilter, nets::Nets};
@@ -58,6 +59,8 @@ pub struct Settings {
     savednetworksidx: Vec<String>,
     filter: ListFilter,
     #[serde(skip)]
+    pub network_state: TableState,
+    #[serde(skip)]
     user_config: UserConfig,
     #[serde(skip)]
     pub nets: Nets,
@@ -68,6 +71,7 @@ impl Default for Settings {
         Self {
             api_keys: HashMap::new(),
             user_config: UserConfig::default(),
+            network_state: TableState::default(),
             filter: ListFilter::None,
             savednetworks: HashMap::new(),
             savednetworksidx: Vec::new(),
