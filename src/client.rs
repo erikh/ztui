@@ -229,3 +229,42 @@ pub fn sync_get_members(client: Client, id: String) -> Result<Vec<Member>, anyho
     t.shutdown_background();
     Ok(members)
 }
+
+pub fn sync_update_member_name(
+    client: Client,
+    network_id: String,
+    id: String,
+    name: String,
+) -> Result<ResponseValue<Member>, anyhow::Error> {
+    let (s, mut r) = mpsc::unbounded_channel();
+
+    let t = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?;
+    t.spawn(async move {
+        let mut member = client.get_network_member(&network_id, &id).await.unwrap();
+        member.name = Some(name);
+        s.send(
+            client
+                .update_network_member(&network_id, &id, &member)
+                .await,
+        )
+        .unwrap();
+    });
+
+    let timeout = Instant::now();
+
+    loop {
+        if let Ok(res) = r.try_recv() {
+            t.shutdown_background();
+            return Ok(res?);
+        } else {
+            std::thread::sleep(Duration::new(0, 10));
+        }
+
+        if timeout.elapsed() > Duration::new(3, 0) {
+            t.shutdown_background();
+            return Err(anyhow!("timeout reading from zerotier"));
+        }
+    }
+}

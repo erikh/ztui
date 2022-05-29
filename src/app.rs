@@ -23,7 +23,10 @@ use tui::{
     Frame, Terminal,
 };
 
-use crate::config::Settings;
+use crate::{
+    client::{self, central_client},
+    config::Settings,
+};
 
 pub const STATUS_DISCONNECTED: &str = "DISCONNECTED";
 
@@ -46,6 +49,7 @@ pub enum Dialog {
     Config,
     Help,
     APIKey(String),
+    RenameMember(String, String),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -244,6 +248,18 @@ impl App {
                             _ => Dialog::Help,
                         }
                     }
+                    'r' => {
+                        if let Some(members) = &lock.members {
+                            if let Some(selected) = self.member_state.selected() {
+                                self.dialog = Dialog::RenameMember(
+                                    members[selected].network_id.clone().unwrap(),
+                                    members[selected].node_id.clone().unwrap(),
+                                );
+                                self.editing_mode = EditingMode::Editing;
+                                self.inputbuffer = members[selected].name.clone().unwrap();
+                            }
+                        }
+                    }
                     _ => {}
                 },
                 _ => {}
@@ -374,6 +390,22 @@ impl App {
                         let mut lock = settings.lock().unwrap();
                         lock.set_api_key_for_id(id.clone(), self.inputbuffer.clone());
                         lock.page = Page::Network(id.clone());
+                    }
+                    Dialog::RenameMember(network_id, member_id) => {
+                        let mut lock = settings.lock().unwrap();
+                        client::sync_update_member_name(
+                            central_client(
+                                lock.api_key_for_id(network_id.to_string())
+                                    .unwrap()
+                                    .to_string(),
+                            )
+                            .unwrap(),
+                            network_id.to_string(),
+                            member_id.to_string(),
+                            self.inputbuffer.clone(),
+                        )
+                        .unwrap();
+                        lock.page = Page::Network(network_id.clone());
                     }
                     _ => {}
                 }

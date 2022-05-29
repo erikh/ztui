@@ -49,6 +49,10 @@ fn dialog_api_key<B: Backend>(f: &mut Frame<B>, app: &mut App) {
     dialog(f, app, 20, "Enter your Network API Key".to_string())
 }
 
+fn dialog_rename_member<B: Backend>(f: &mut Frame<B>, app: &mut App) {
+    dialog(f, app, 20, "Enter the new name".to_string())
+}
+
 fn dialog_join<B: Backend>(f: &mut Frame<B>, app: &mut App) {
     dialog(f, app, 10, "Join a Network".to_string())
 }
@@ -67,6 +71,9 @@ pub fn display_dialogs<B: Backend>(
         }
         Dialog::Help => {
             dialog_help(f, settings.lock().unwrap().page.clone())?;
+        }
+        Dialog::RenameMember(_, _) => {
+            dialog_rename_member(f, app);
         }
         _ => {}
     }
@@ -243,6 +250,7 @@ static ref HELP_TEXT: Vec<Vec<[&'static str; 2]>> = vec![
     vec![
         ["Up/Down", "Navigate the List"],
         ["q", "quit to networks screen"],
+        ["r", "Rename a Member"],
     ],
 ];
 }
