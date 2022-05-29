@@ -112,6 +112,15 @@ pub fn display_network<B: Backend>(
                     ),
                     Style::default().fg(Color::LightCyan),
                 )),
+                Cell::from(Span::styled(
+                    m.config
+                        .clone()
+                        .unwrap()
+                        .ip_assignments
+                        .unwrap_or_default()
+                        .join(", "),
+                    Style::default().fg(Color::LightGreen),
+                )),
             ])
         })
         .collect::<Vec<Row>>();
@@ -123,6 +132,7 @@ pub fn display_network<B: Backend>(
         .widths(&[
             Constraint::Length(12),
             Constraint::Length(20),
+            Constraint::Length(25),
             Constraint::Length(25),
         ])
         .highlight_style(Style::default().add_modifier(Modifier::BOLD))
