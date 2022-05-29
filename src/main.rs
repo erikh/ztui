@@ -1,3 +1,5 @@
+use std::sync::{Arc, Mutex};
+
 use crate::{
     config::{config_path, Settings},
     terminal::deinit_terminal,
@@ -20,17 +22,17 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let mut app = app::App::default();
     std::fs::create_dir_all(config_path())?;
-    app.settings = match Settings::from_dir(config_path()) {
+    let settings = Arc::new(Mutex::new(match Settings::from_dir(config_path()) {
         Ok(c) => c,
         Err(_) => Settings::default(),
-    };
+    }));
 
     terminal.clear()?;
     eprintln!("Polling ZeroTier for network information...");
 
-    let res = app.run(&mut terminal);
+    let res = app.run(&mut terminal, settings.clone());
 
-    app.settings.to_file(config_path())?;
+    settings.lock().unwrap().to_file(config_path())?;
     deinit_terminal(terminal)?;
 
     res

@@ -1,4 +1,7 @@
-use std::time::SystemTime;
+use std::{
+    sync::{Arc, Mutex},
+    time::SystemTime,
+};
 
 use time::{Duration, OffsetDateTime};
 use tui::{
@@ -12,7 +15,10 @@ use tui::{
 use zerotier_central_api::types::Member;
 use zerotier_one_api::types::Network;
 
-use crate::app::{App, Dialog, ListFilter, Page, STATUS_DISCONNECTED};
+use crate::{
+    app::{App, Dialog, ListFilter, Page, STATUS_DISCONNECTED},
+    config::Settings,
+};
 
 fn dialog<B: Backend>(f: &mut Frame<B>, app: &mut App, margin: u16, help_text: String) {
     let w = f.size().width;
@@ -130,6 +136,7 @@ pub fn display_networks<B: Backend>(
     f: &mut Frame<'_, B>,
     app: &mut App,
     networks: Vec<Network>,
+    settings: Arc<Mutex<Settings>>,
 ) -> Result<(), anyhow::Error> {
     let list = Layout::default()
         .constraints([Constraint::Min(4)])
@@ -139,15 +146,15 @@ pub fn display_networks<B: Backend>(
         .borders(Borders::ALL)
         .title("[ ZeroTier Terminal UI | Press h for Help ]");
 
-    let new = app.settings.update_networks(networks)?;
+    let mut lock = settings.lock().unwrap();
+    let new = lock.update_networks(networks)?;
 
-    let rows = app
-        .settings
+    let rows = lock
         .idx_iter()
         .filter_map(|k| {
-            let v = app.settings.get(k).unwrap();
+            let v = lock.get(k).unwrap();
 
-            if let ListFilter::Connected = app.settings.filter() {
+            if let ListFilter::Connected = lock.filter() {
                 if v.subtype_1.status.clone().unwrap() == STATUS_DISCONNECTED {
                     return None;
                 }
@@ -176,8 +183,7 @@ pub fn display_networks<B: Backend>(
                     Style::default().fg(Color::LightGreen),
                 )),
                 Cell::from(Span::styled(
-                    if let Some(s) = app
-                        .settings
+                    if let Some(s) = lock
                         .nets
                         .clone()
                         .get_usage(v.subtype_1.port_device_name.clone().unwrap())
