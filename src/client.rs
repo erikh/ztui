@@ -1,3 +1,9 @@
+// NOTE: since most of the outer code is sync w/ threads, and most of the code in here is async,
+// we've adopted a weird model in here where we instantiate the tokio runtime on each use, and tear
+// it down afterwards. It's not the most efficient pattern I am well aware but it does work.
+//
+// -erikh
+//
 use std::{
     path::Path,
     time::{Duration, Instant},
