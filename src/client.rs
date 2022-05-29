@@ -193,7 +193,10 @@ pub fn sync_get_networks() -> Result<Vec<Network>, anyhow::Error> {
 pub fn sync_get_members(client: Client, id: String) -> Result<Vec<Member>, anyhow::Error> {
     let (s, mut r) = mpsc::unbounded_channel();
 
-    tokio::spawn(async move { s.send(client.get_network_member_list(&id).await).unwrap() });
+    let t = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?;
+    t.spawn(async move { s.send(client.get_network_member_list(&id).await).unwrap() });
 
     let members: Vec<Member>;
 
@@ -217,5 +220,6 @@ pub fn sync_get_members(client: Client, id: String) -> Result<Vec<Member>, anyho
         }
     }
 
+    t.shutdown_background();
     Ok(members)
 }

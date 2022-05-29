@@ -23,7 +23,7 @@ use tui::{
     Frame, Terminal,
 };
 
-use crate::{client::central_client, config::Settings};
+use crate::config::Settings;
 
 pub const STATUS_DISCONNECTED: &str = "DISCONNECTED";
 
@@ -54,13 +54,18 @@ pub enum Page {
     Network(String),
 }
 
+impl Default for Page {
+    fn default() -> Self {
+        Page::Networks
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct App {
     pub editing_mode: EditingMode,
     pub dialog: Dialog,
     pub inputbuffer: String,
     pub last_usage: HashMap<String, Vec<(u128, u128, Instant)>>,
-    pub page: Page,
     pub member_count: usize,
     pub member_state: TableState,
 }
@@ -68,7 +73,6 @@ pub struct App {
 impl Default for App {
     fn default() -> Self {
         Self {
-            page: Page::Networks,
             dialog: Dialog::None,
             editing_mode: EditingMode::Command,
             inputbuffer: String::new(),
@@ -117,21 +121,19 @@ impl App {
         }
     }
 
-    fn set_dialog_api_key(&mut self, id: String) {
-        self.page = Page::Networks;
+    fn set_dialog_api_key(&mut self, settings: Arc<Mutex<Settings>>, id: String) {
+        settings.lock().unwrap().page = Page::Networks;
         self.dialog = Dialog::APIKey(id);
         self.editing_mode = EditingMode::Editing;
         self.inputbuffer = String::new();
     }
 
-    fn show_error<B: Backend>(&self, f: &mut Frame<'_, B>, mut message: String) {
+    fn show_toast<B: Backend>(&self, f: &mut Frame<'_, B>, color: Color, mut message: String) {
         let size = f.size();
         message.truncate(size.width as usize - 10);
         let span = Spans::from(vec![Span::styled(
             format!("[ {} ]", message),
-            Style::default()
-                .fg(Color::LightRed)
-                .add_modifier(Modifier::BOLD),
+            Style::default().fg(color).add_modifier(Modifier::BOLD),
         )]);
 
         let rect = Rect::new(
@@ -149,37 +151,38 @@ impl App {
         f: &mut Frame<'_, B>,
         settings: Arc<Mutex<Settings>>,
     ) -> Result<(), anyhow::Error> {
-        match self.page.clone() {
+        let lock = settings.lock().unwrap();
+        let page = lock.page.clone();
+        drop(lock);
+
+        match page {
             Page::Networks => {
                 crate::display::display_networks(f, self, settings.clone())?;
             }
             Page::Network(id) => {
-                if let Some(key) = settings.lock().unwrap().api_key_for_id(id.clone()) {
-                    let client = central_client(key.to_string())?;
-                    match crate::client::sync_get_members(client, id.clone()) {
-                        Ok(members) => {
-                            crate::display::display_network(f, self, members)?;
-                        }
-                        Err(e) => {
-                            // order is very important here, the recursive draw call must happen
-                            // before the error show call otherwise the error doesn't show.
-                            // however, if you misorder draw and the set_dialog_api_key call you
-                            // will enter an infinite loop.
-                            self.set_dialog_api_key(id.clone());
-                            self.draw(f, settings.clone())?;
-                            self.show_error(
-                                f,
-                                format!("Invalid API Key for Network ({}): {}", id, e),
-                            );
-                        }
-                    }
+                let lock = settings.lock().unwrap();
+                let members = lock.members.clone();
+                let err = lock.last_error.clone();
+                drop(lock);
+
+                if let Some(err) = err {
+                    self.show_toast(f, Color::LightRed, err);
+                    self.set_dialog_api_key(settings.clone(), id);
+                }
+
+                if let Some(members) = members {
+                    crate::display::display_network(f, self, members)?;
                 } else {
-                    self.set_dialog_api_key(id);
+                    self.show_toast(
+                        f,
+                        Color::LightGreen,
+                        "Loading your results, please wait...".to_string(),
+                    )
                 }
             }
         }
 
-        crate::display::display_dialogs(f, self)?;
+        crate::display::display_dialogs(f, self, settings)?;
         Ok(())
     }
 
@@ -208,7 +211,7 @@ impl App {
         key: KeyEvent,
     ) -> Result<bool, anyhow::Error> {
         let mut lock = settings.lock().unwrap();
-        match &self.page {
+        match &lock.page {
             Page::Network(_) => match key.code {
                 KeyCode::Up => {
                     if let Some(pos) = self.member_state.selected() {
@@ -229,7 +232,9 @@ impl App {
                 }
                 KeyCode::Char(c) => match c {
                     'q' => {
-                        self.page = Page::Networks;
+                        lock.page = Page::Networks;
+                        lock.members = None;
+                        self.member_state.select(Some(0));
                         self.dialog = Dialog::None;
                         self.editing_mode = EditingMode::Command;
                     }
@@ -304,15 +309,13 @@ impl App {
                         }
                     }
                     's' => {
-                        let lock = lock;
-
                         let id = lock.get_network_id_by_pos(
                             lock.network_state.selected().unwrap_or_default(),
                         );
                         let key = lock.api_key_for_id(id.clone());
                         if let Some(_) = key {
                             self.member_state.select(Some(0));
-                            self.page = Page::Network(id)
+                            lock.page = Page::Network(id)
                         } else {
                             self.dialog = Dialog::APIKey(id);
                             self.editing_mode = EditingMode::Editing;
@@ -368,11 +371,9 @@ impl App {
                         crate::client::join_network(self.inputbuffer.clone()).unwrap();
                     }
                     Dialog::APIKey(id) => {
-                        settings
-                            .lock()
-                            .unwrap()
-                            .set_api_key_for_id(id.clone(), self.inputbuffer.clone());
-                        self.page = Page::Network(id.clone());
+                        let mut lock = settings.lock().unwrap();
+                        lock.set_api_key_for_id(id.clone(), self.inputbuffer.clone());
+                        lock.page = Page::Network(id.clone());
                     }
                     _ => {}
                 }

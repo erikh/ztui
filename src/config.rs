@@ -5,9 +5,13 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use tui::widgets::TableState;
+use zerotier_central_api::types::Member;
 use zerotier_one_api::types::Network;
 
-use crate::{app::ListFilter, nets::Nets};
+use crate::{
+    app::{ListFilter, Page},
+    nets::Nets,
+};
 
 pub fn config_path() -> PathBuf {
     directories::UserDirs::new()
@@ -59,6 +63,12 @@ pub struct Settings {
     savednetworksidx: Vec<String>,
     filter: ListFilter,
     #[serde(skip)]
+    pub last_error: Option<String>,
+    #[serde(skip)]
+    pub members: Option<Vec<Member>>,
+    #[serde(skip)]
+    pub page: Page,
+    #[serde(skip)]
     pub network_state: TableState,
     #[serde(skip)]
     user_config: UserConfig,
@@ -69,6 +79,9 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
+            last_error: None,
+            members: None,
+            page: Page::Networks,
             api_keys: HashMap::new(),
             user_config: UserConfig::default(),
             network_state: TableState::default(),

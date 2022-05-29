@@ -56,6 +56,7 @@ fn dialog_join<B: Backend>(f: &mut Frame<B>, app: &mut App) {
 pub fn display_dialogs<B: Backend>(
     f: &mut Frame<'_, B>,
     app: &mut App,
+    settings: Arc<Mutex<Settings>>,
 ) -> Result<(), anyhow::Error> {
     match app.dialog {
         Dialog::Join => {
@@ -65,7 +66,7 @@ pub fn display_dialogs<B: Backend>(
             dialog_api_key(f, app);
         }
         Dialog::Help => {
-            dialog_help(f, app.page.clone())?;
+            dialog_help(f, settings.lock().unwrap().page.clone())?;
         }
         _ => {}
     }
