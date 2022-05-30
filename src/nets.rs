@@ -80,8 +80,8 @@ impl Nets {
                     rx_bytes /= elapsed;
                     tx_bytes /= elapsed;
                 } else {
-                    rx_bytes *= 1.0 - elapsed;
-                    tx_bytes *= 1.0 - elapsed;
+                    rx_bytes *= 1.0 + (1.0 - elapsed);
+                    tx_bytes *= 1.0 + (1.0 - elapsed);
                 }
 
                 Some(format!(
