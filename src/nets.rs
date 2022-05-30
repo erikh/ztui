@@ -77,8 +77,8 @@ impl Nets {
                 let mut tx_bytes: f64 = second.1 as f64 - first.1 as f64;
 
                 if elapsed > 1.0 {
-                    rx_bytes /= elapsed - 1.0;
-                    tx_bytes /= elapsed - 1.0;
+                    rx_bytes /= elapsed;
+                    tx_bytes /= elapsed;
                 } else {
                     rx_bytes *= 1.0 - elapsed;
                     tx_bytes *= 1.0 - elapsed;
