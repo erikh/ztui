@@ -72,7 +72,6 @@ impl Nets {
                 let mut i = s.iter();
                 let second = i.nth(len - 1).unwrap();
 
-                // this math is wrong
                 let elapsed = second.2.duration_since(first.2).as_millis() as f64 / 1000 as f64;
                 let mut rx_bytes: f64 = second.0 as f64 - first.0 as f64;
                 let mut tx_bytes: f64 = second.1 as f64 - first.1 as f64;
