@@ -74,8 +74,16 @@ impl Nets {
 
                 // this math is wrong
                 let elapsed = second.2.duration_since(first.2).as_millis() as f64 / 1000 as f64;
-                let rx_bytes = (second.0 as f64 * elapsed) - (first.0 as f64 * elapsed);
-                let tx_bytes = (second.1 as f64 * elapsed) - (first.1 as f64 * elapsed);
+                let mut rx_bytes: f64 = second.0 as f64 - first.0 as f64;
+                let mut tx_bytes: f64 = second.1 as f64 - first.1 as f64;
+
+                if elapsed > 1.0 {
+                    rx_bytes /= elapsed - 1.0;
+                    tx_bytes /= elapsed - 1.0;
+                } else {
+                    rx_bytes *= 1.0 - elapsed;
+                    tx_bytes *= 1.0 - elapsed;
+                }
 
                 Some(format!(
                     "Rx: {}/s | Tx: {}/s",
