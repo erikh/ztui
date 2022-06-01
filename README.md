@@ -22,6 +22,14 @@ Members List / Network View:
 
 <center><img src="readme-images/network.png" /></center>
 
+## Installing
+
+Get [Rust](https://www.rustup.rs) if you need to.
+
+```
+cargo install --git https://github.com/erikh/ztui
+```
+
 ## Configuring arbitrary commands
 
 ### Rules
