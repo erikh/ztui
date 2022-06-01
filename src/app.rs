@@ -11,9 +11,9 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use nix::sys::signal::{SIGCHLD, SIGINT, SIGTERM};
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use serde::{Deserialize, Serialize};
+use signal::Signal::{SIGCHLD, SIGINT, SIGTERM};
 use tokio::sync::mpsc;
 use tui::{
     backend::{Backend, CrosstermBackend},
@@ -531,8 +531,11 @@ impl App {
                         child.wait()?;
                     }
                     _ => {
-                        nix::sys::signal::kill(nix::unistd::Pid::from_raw(pid as i32), sig)
-                            .unwrap();
+                        nix::sys::signal::kill(
+                            nix::unistd::Pid::from_raw(pid as i32),
+                            Some(nix::sys::signal::SIGTERM),
+                        )
+                        .unwrap();
                     }
                 }
                 break;
