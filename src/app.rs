@@ -260,6 +260,21 @@ impl App {
                             }
                         }
                     }
+                    'd' => {
+                        if let Some(members) = &lock.members.get(id) {
+                            if let Some(selected) = self.member_state.selected() {
+                                let node_id = members[selected].node_id.clone().unwrap();
+                                let client = central_client(
+                                    lock.api_key_for_id(id.to_string()).unwrap().to_string(),
+                                )?;
+                                crate::client::sync_deauthorize_member(
+                                    client,
+                                    id.to_string(),
+                                    node_id,
+                                )?;
+                            }
+                        }
+                    }
                     _ => {}
                 },
                 _ => {}

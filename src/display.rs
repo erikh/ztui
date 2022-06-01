@@ -97,6 +97,8 @@ pub fn display_network<B: Backend>(
     let rows = members
         .iter()
         .map(|m| {
+            let authed = m.config.clone().unwrap().authorized.unwrap_or_default();
+
             Row::new(vec![
                 Cell::from(Span::styled(
                     m.node_id.clone().unwrap(),
@@ -128,6 +130,14 @@ pub fn display_network<B: Backend>(
                         .join(", "),
                     Style::default().fg(Color::LightGreen),
                 )),
+                Cell::from(Span::styled(
+                    if authed { "Auth" } else { "Unauth" },
+                    Style::default().fg(if authed {
+                        Color::LightGreen
+                    } else {
+                        Color::LightRed
+                    }),
+                )),
             ])
         })
         .collect::<Vec<Row>>();
@@ -141,6 +151,7 @@ pub fn display_network<B: Backend>(
             Constraint::Length(20),
             Constraint::Length(25),
             Constraint::Length(25),
+            Constraint::Length(8),
         ])
         .highlight_style(Style::default().add_modifier(Modifier::BOLD))
         .highlight_symbol("> ");

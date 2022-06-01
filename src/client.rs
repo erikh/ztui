@@ -268,3 +268,35 @@ pub fn sync_update_member_name(
         }
     }
 }
+
+pub fn sync_deauthorize_member(
+    client: Client,
+    network_id: String,
+    id: String,
+) -> Result<ResponseValue<()>, anyhow::Error> {
+    let (s, mut r) = mpsc::unbounded_channel();
+
+    let t = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?;
+    t.spawn(async move {
+        s.send(client.delete_network_member(&network_id, &id).await)
+            .unwrap();
+    });
+
+    let timeout = Instant::now();
+
+    loop {
+        if let Ok(res) = r.try_recv() {
+            t.shutdown_background();
+            return Ok(res?);
+        } else {
+            std::thread::sleep(Duration::new(0, 10));
+        }
+
+        if timeout.elapsed() > Duration::new(3, 0) {
+            t.shutdown_background();
+            return Err(anyhow!("timeout reading from zerotier"));
+        }
+    }
+}
