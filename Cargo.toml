@@ -21,7 +21,8 @@ directories = "*"
 bat = { version = "*", default-features = false, features = [ "minimal-application" ] }
 byte-unit = "*"
 portable-pty = "*"
-libc = "*"
 fancy-duration = { version = "*", path = "../fancy-duration" }
 time = { version = "^0.3", features = [ "local-offset" ] }
 lazy_static = "*"
+nix = "*"
+signal = "*"

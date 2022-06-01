@@ -11,6 +11,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use nix::sys::signal::{SIGCHLD, SIGINT, SIGTERM};
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
@@ -389,9 +390,7 @@ impl App {
                         if let Some(net) = lock
                             .get_network_by_pos(lock.network_state.selected().unwrap_or_default())
                         {
-                            if let Some(s) = settings
-                                .lock()
-                                .unwrap()
+                            if let Some(s) = lock
                                 .user_config()
                                 .command_for(x, net.subtype_1.port_device_name.clone().unwrap())
                             {
@@ -500,16 +499,10 @@ impl App {
             let mut cmd = CommandBuilder::new("/bin/sh");
             cmd.args(args);
 
-            let mut child = pair.slave.spawn_command(cmd).unwrap();
-            let pid = child.process_id().unwrap();
-
             let (s, mut r) = mpsc::unbounded_channel();
 
-            tokio::spawn(async move {
-                tokio::signal::ctrl_c().await.unwrap();
-                unsafe { libc::kill(pid as i32, libc::SIGTERM) };
-                s.send(()).unwrap();
-            });
+            let mut child = pair.slave.spawn_command(cmd).unwrap();
+            let pid = child.process_id().unwrap();
 
             let mut reader = pair.master.try_clone_reader().unwrap();
             let mut writer = pair.master.try_clone_writer().unwrap();
@@ -530,7 +523,21 @@ impl App {
                 }
             });
 
-            child.wait()?;
+            let trap = signal::trap::Trap::trap(&[SIGINT, SIGTERM, SIGCHLD]);
+
+            for sig in trap {
+                match sig {
+                    SIGCHLD => {
+                        child.wait()?;
+                    }
+                    _ => {
+                        nix::sys::signal::kill(nix::unistd::Pid::from_raw(pid as i32), sig)
+                            .unwrap();
+                    }
+                }
+                break;
+            }
+            s.send(()).unwrap();
 
             eprintln!("\nPress ENTER to continue");
             let mut buf = [0u8; 1];
