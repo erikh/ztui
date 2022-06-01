@@ -61,11 +61,10 @@ pub struct Settings {
     api_keys: HashMap<String, String>,
     savednetworks: HashMap<String, Network>,
     savednetworksidx: Vec<String>,
+    pub members: HashMap<String, Vec<Member>>,
     filter: ListFilter,
     #[serde(skip)]
     pub last_error: Option<String>,
-    #[serde(skip)]
-    pub members: Option<Vec<Member>>,
     #[serde(skip)]
     pub page: Page,
     #[serde(skip)]
@@ -80,7 +79,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             last_error: None,
-            members: None,
+            members: HashMap::new(),
             page: Page::Networks,
             api_keys: HashMap::new(),
             user_config: UserConfig::default(),

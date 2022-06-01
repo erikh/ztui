@@ -49,9 +49,8 @@ fn main() -> Result<(), anyhow::Error> {
 fn start_supervisors(settings: Arc<Mutex<Settings>>) {
     loop {
         let mut lock = settings.lock().unwrap();
-        match &lock.page {
+        match lock.page.clone() {
             Page::Networks => {
-                lock.members = None;
                 let networks = crate::client::sync_get_networks().unwrap();
                 lock.nets.refresh().unwrap();
                 if lock.update_networks(networks).unwrap() {
@@ -62,14 +61,13 @@ fn start_supervisors(settings: Arc<Mutex<Settings>>) {
                 if let Some(key) = lock.api_key_for_id(id.clone()) {
                     let client = central_client(key.to_string()).unwrap();
                     match crate::client::sync_get_members(client, id.clone()) {
-                        Ok(members) => lock.members = Some(members),
+                        Ok(members) => {
+                            lock.members.insert(id.clone(), members);
+                        }
                         Err(e) => {
                             lock.last_error = Some(e.to_string());
-                            lock.members = None;
                         }
                     }
-                } else {
-                    lock.members = None;
                 }
             }
         }

@@ -166,6 +166,7 @@ impl App {
             Page::Network(id) => {
                 let lock = settings.lock().unwrap();
                 let members = lock.members.clone();
+                let members = members.get(&id);
                 let err = lock.last_error.clone();
                 drop(lock);
 
@@ -175,7 +176,7 @@ impl App {
                 }
 
                 if let Some(members) = members {
-                    crate::display::display_network(f, self, members)?;
+                    crate::display::display_network(f, self, members.to_vec())?;
                 } else {
                     self.show_toast(
                         f,
@@ -216,7 +217,7 @@ impl App {
     ) -> Result<bool, anyhow::Error> {
         let mut lock = settings.lock().unwrap();
         match &lock.page {
-            Page::Network(_) => match key.code {
+            Page::Network(id) => match key.code {
                 KeyCode::Up => {
                     if let Some(pos) = self.member_state.selected() {
                         if pos > 0 {
@@ -237,7 +238,6 @@ impl App {
                 KeyCode::Char(c) => match c {
                     'q' => {
                         lock.page = Page::Networks;
-                        lock.members = None;
                         self.member_state.select(Some(0));
                         self.dialog = Dialog::None;
                         self.editing_mode = EditingMode::Command;
@@ -249,7 +249,7 @@ impl App {
                         }
                     }
                     'r' => {
-                        if let Some(members) = &lock.members {
+                        if let Some(members) = &lock.members.get(id) {
                             if let Some(selected) = self.member_state.selected() {
                                 self.dialog = Dialog::RenameMember(
                                     members[selected].network_id.clone().unwrap(),
