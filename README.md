@@ -16,11 +16,11 @@ transform how people work with it. It provides the following features:
 
 Networks List View:
 
-<center><img width="50%" src="readme-images/main.png" /></center>
+<center><img width="80%" src="readme-images/main.png" /></center>
 
 Members List / Network View:
 
-<center><img width="50%" src="readme-images/network.png" /></center>
+<center><img width="80%" src="readme-images/network.png" /></center>
 
 ## Configuring arbitrary commands
 
