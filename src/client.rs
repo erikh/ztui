@@ -269,7 +269,62 @@ pub fn sync_update_member_name(
     }
 }
 
+pub fn sync_member_auth(
+    client: Client,
+    network_id: String,
+    id: String,
+    auth: bool,
+) -> Result<ResponseValue<Member>, anyhow::Error> {
+    let (s, mut r) = mpsc::unbounded_channel();
+
+    let t = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?;
+    t.spawn(async move {
+        let mut member = client.get_network_member(&network_id, &id).await.unwrap();
+        member.config.as_mut().unwrap().authorized = Some(auth);
+        s.send(
+            client
+                .update_network_member(&network_id, &id, &member)
+                .await,
+        )
+        .unwrap();
+    });
+
+    let timeout = Instant::now();
+
+    loop {
+        if let Ok(res) = r.try_recv() {
+            t.shutdown_background();
+            return Ok(res?);
+        } else {
+            std::thread::sleep(Duration::new(0, 10));
+        }
+
+        if timeout.elapsed() > Duration::new(3, 0) {
+            t.shutdown_background();
+            return Err(anyhow!("timeout reading from zerotier"));
+        }
+    }
+}
+
 pub fn sync_deauthorize_member(
+    client: Client,
+    network_id: String,
+    id: String,
+) -> Result<ResponseValue<Member>, anyhow::Error> {
+    sync_member_auth(client, network_id, id, false)
+}
+
+pub fn sync_authorize_member(
+    client: Client,
+    network_id: String,
+    id: String,
+) -> Result<ResponseValue<Member>, anyhow::Error> {
+    sync_member_auth(client, network_id, id, true)
+}
+
+pub fn sync_delete_member(
     client: Client,
     network_id: String,
     id: String,

@@ -50,6 +50,7 @@ pub enum Dialog {
     Help,
     APIKey(String),
     RenameMember(String, String),
+    AddMember(String),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -260,6 +261,26 @@ impl App {
                             }
                         }
                     }
+                    'A' => {
+                        self.dialog = Dialog::AddMember(id.to_string());
+                        self.editing_mode = EditingMode::Editing;
+                        self.inputbuffer = String::new();
+                    }
+                    'a' => {
+                        if let Some(members) = &lock.members.get(id) {
+                            if let Some(selected) = self.member_state.selected() {
+                                let node_id = members[selected].node_id.clone().unwrap();
+                                let client = central_client(
+                                    lock.api_key_for_id(id.to_string()).unwrap().to_string(),
+                                )?;
+                                crate::client::sync_authorize_member(
+                                    client,
+                                    id.to_string(),
+                                    node_id,
+                                )?;
+                            }
+                        }
+                    }
                     'd' => {
                         if let Some(members) = &lock.members.get(id) {
                             if let Some(selected) = self.member_state.selected() {
@@ -272,6 +293,17 @@ impl App {
                                     id.to_string(),
                                     node_id,
                                 )?;
+                            }
+                        }
+                    }
+                    'D' => {
+                        if let Some(members) = &lock.members.get(id) {
+                            if let Some(selected) = self.member_state.selected() {
+                                let node_id = members[selected].node_id.clone().unwrap();
+                                let client = central_client(
+                                    lock.api_key_for_id(id.to_string()).unwrap().to_string(),
+                                )?;
+                                crate::client::sync_delete_member(client, id.to_string(), node_id)?;
                             }
                         }
                     }
@@ -405,6 +437,20 @@ impl App {
                         let mut lock = settings.lock().unwrap();
                         lock.set_api_key_for_id(id.clone(), self.inputbuffer.clone());
                         lock.page = Page::Network(id.clone());
+                    }
+                    Dialog::AddMember(network_id) => {
+                        let lock = settings.lock().unwrap();
+                        crate::client::sync_authorize_member(
+                            central_client(
+                                lock.api_key_for_id(network_id.to_string())
+                                    .unwrap()
+                                    .to_string(),
+                            )
+                            .unwrap(),
+                            network_id.to_string(),
+                            self.inputbuffer.clone(),
+                        )
+                        .unwrap();
                     }
                     Dialog::RenameMember(network_id, member_id) => {
                         let mut lock = settings.lock().unwrap();
