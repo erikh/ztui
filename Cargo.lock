@@ -430,6 +430,8 @@ dependencies = [
 [[package]]
 name = "fancy-duration"
 version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1513718752a185157254ce39805f589a33abbc64788cdbba30cc1039b8a2d524"
 dependencies = [
  "itoa",
  "time 0.3.9",

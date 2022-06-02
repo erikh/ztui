@@ -390,10 +390,7 @@ impl App {
                         if let Some(net) = lock
                             .get_network_by_pos(lock.network_state.selected().unwrap_or_default())
                         {
-                            if let Some(s) = lock
-                                .user_config()
-                                .command_for(x, net.subtype_1.port_device_name.clone().unwrap())
-                            {
+                            if let Some(s) = lock.user_config().command_for(x, net) {
                                 App::run_command(terminal, s)?;
                             }
                         }
