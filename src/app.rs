@@ -308,7 +308,22 @@ impl App {
                             }
                         }
                     }
-                    _ => {}
+                    x => {
+                        if let Some(members) = &lock.members.get(id) {
+                            {
+                                if let Some(member) = members
+                                    .iter()
+                                    .nth(lock.network_state.selected().unwrap_or_default())
+                                {
+                                    if let Some(s) =
+                                        lock.user_config().command_for_member(x, member)
+                                    {
+                                        App::run_command(terminal, s)?;
+                                    }
+                                }
+                            }
+                        }
+                    }
                 },
                 _ => {}
             },

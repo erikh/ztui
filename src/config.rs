@@ -42,9 +42,36 @@ fn template_network(s: Option<&String>, network: &Network) -> Option<String> {
     )
 }
 
+fn template_member(s: Option<&String>, member: &Member) -> Option<String> {
+    if s.is_none() {
+        return None;
+    }
+
+    return Some(
+        s.clone()
+            .unwrap()
+            .replace("%n", &member.network_id.clone().unwrap())
+            .replace("%i", &member.node_id.clone().unwrap())
+            .replace("%N", &member.name.clone().unwrap())
+            .replace(
+                "%a",
+                &member
+                    .config
+                    .clone()
+                    .unwrap()
+                    .ip_assignments
+                    .unwrap()
+                    .iter()
+                    .nth(0)
+                    .expect("No assigned addresses"),
+            ),
+    );
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserConfig {
-    commands: HashMap<char, String>,
+    network_commands: HashMap<char, String>,
+    member_commands: HashMap<char, String>,
 }
 
 impl UserConfig {
@@ -54,14 +81,19 @@ impl UserConfig {
     }
 
     pub fn command_for_network(&self, c: char, network: &Network) -> Option<String> {
-        template_network(self.commands.get(&c), network)
+        template_network(self.network_commands.get(&c), network)
+    }
+
+    pub fn command_for_member(&self, c: char, member: &Member) -> Option<String> {
+        template_member(self.member_commands.get(&c), member)
     }
 }
 
 impl Default for UserConfig {
     fn default() -> Self {
         Self {
-            commands: HashMap::new(),
+            network_commands: HashMap::new(),
+            member_commands: HashMap::new(),
         }
     }
 }

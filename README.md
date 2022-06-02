@@ -43,19 +43,31 @@ After you start `ztui` for the first time, `$HOME/.config.zerotier/settings.json
 
 ```json
 {
-        "commands": {
+        "network_commands": {
                 "1": "/bin/tcpdump -i %i"
+        },
+        "member_commands": {
+                "1": "/bin/iperf -c %a"
         }
 }
 ```
 
-Format strings available:
+Network format strings available:
 
 - `%i`: the interface of the ZeroTier network
 - `%n`: the network ID of the ZeroTier network
 - `%a`: the first addresses in the list of assigned IP addresses
 
 In this case, it would allow me to press `1` over a network to `tcpdump` its interface; then I would control+C out of it to come back to `ztui`.
+
+Member format strings available:
+
+- `%n`: the network ID of the ZeroTier network
+- `%i`: the identity of the member of this ZeroTier network
+- `%a`: the first assigned IP address of this member
+- `%N`: the name (not the fqdn!) of the ZeroTier network member as it appears in central
+
+In the above example, it allows me to start an `iperf` client against the address of the selected member.
 
 ## Author
 
