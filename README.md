@@ -49,7 +49,11 @@ After you start `ztui` for the first time, `$HOME/.config.zerotier/settings.json
 }
 ```
 
-The `%i` denotes the ZeroTier network interface that relates to the network you are selecting when pressing the key. `%i` is the only supported format string right now.
+Format strings available:
+
+- `%i`: the interface of the ZeroTier network
+- `%n`: the network ID of the ZeroTier network
+- `%a`: the first addresses in the list of assigned IP addresses
 
 In this case, it would allow me to press `1` over a network to `tcpdump` its interface; then I would control+C out of it to come back to `ztui`.
 
