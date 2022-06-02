@@ -39,7 +39,7 @@ cargo install --git https://github.com/erikh/ztui
 
 ### Configuration Syntax
 
-After you start `ztui` for the first time, `$HOME/.config.zerotier/settings.json` will be created for you with your last-saved network information. Now, what we want to do is create `$HOME/.config.zerotier/config.json` and add something like this to launch `tcpdump`:
+After you start `ztui` for the first time, `$HOME/.config.zerotier/settings.json` will be created for you with your last-saved network information. Now, what we want to do is create `$HOME/.config.zerotier/config.json` and add something like this:
 
 ```json
 {
