@@ -20,15 +20,26 @@ pub fn config_path() -> PathBuf {
         .join(".config.zerotier")
 }
 
-fn template(s: Option<&String>, network: &Network) -> Option<String> {
+fn template_network(s: Option<&String>, network: &Network) -> Option<String> {
     if s.is_none() {
         return None;
     }
 
-    Some(s.clone().unwrap().replace(
-        "%i",
-        &format!("'{}'", network.subtype_1.port_device_name.clone().unwrap()),
-    ))
+    Some(
+        s.clone()
+            .unwrap()
+            .replace("%i", &network.subtype_1.port_device_name.clone().unwrap())
+            .replace("%n", &network.subtype_1.id.clone().unwrap())
+            .replace(
+                "%a",
+                &network
+                    .subtype_1
+                    .assigned_addresses
+                    .iter()
+                    .nth(0)
+                    .expect("No assigned addresses"),
+            ),
+    )
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -42,8 +53,8 @@ impl UserConfig {
         Ok(serde_json::from_str(&config_file)?)
     }
 
-    pub fn command_for(&self, c: char, network: &Network) -> Option<String> {
-        template(self.commands.get(&c), network)
+    pub fn command_for_network(&self, c: char, network: &Network) -> Option<String> {
+        template_network(self.commands.get(&c), network)
     }
 }
 
