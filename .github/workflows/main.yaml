@@ -16,7 +16,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
-      - uses: taiki-e/upload-rust-binary-action@v1
+      - uses: erikh/upload-rust-binary-action@v1
         with:
           # (required)
           bin: ztui
