@@ -161,6 +161,26 @@ pub fn display_network<B: Backend>(
 
     let table = Table::new(rows)
         .block(titleblock)
+        .header(Row::new(vec![
+            Cell::from(Span::styled("Node ID", Style::default().fg(Color::White))),
+            Cell::from(Span::styled("Name", Style::default().fg(Color::White))),
+            Cell::from(Span::styled(
+                "Last Online",
+                Style::default().fg(Color::White),
+            )),
+            Cell::from(Span::styled(
+                "IP Addresses",
+                Style::default().fg(Color::White),
+            )),
+            Cell::from(Span::styled(
+                "Auth Status",
+                Style::default().fg(Color::White),
+            )),
+            Cell::from(Span::styled(
+                "Capabilities",
+                Style::default().fg(Color::White),
+            )),
+        ]))
         .widths(&[
             Constraint::Length(12),
             Constraint::Length(20),
@@ -246,6 +266,19 @@ pub fn display_networks<B: Backend>(
 
     let table = Table::new(rows)
         .block(titleblock)
+        .header(Row::new(vec![
+            Cell::from(Span::styled(
+                "Network ID",
+                Style::default().fg(Color::White),
+            )),
+            Cell::from(Span::styled("Name", Style::default().fg(Color::White))),
+            Cell::from(Span::styled("Status", Style::default().fg(Color::White))),
+            Cell::from(Span::styled(
+                "Assigned IPs",
+                Style::default().fg(Color::White),
+            )),
+            Cell::from(Span::styled("Usage", Style::default().fg(Color::White))),
+        ]))
         .widths(&[
             Constraint::Length(16),
             Constraint::Length(20),
