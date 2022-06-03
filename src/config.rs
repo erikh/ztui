@@ -166,10 +166,6 @@ impl Settings {
         self.filter.clone()
     }
 
-    pub fn network_count(&self) -> usize {
-        self.savednetworksidx.len()
-    }
-
     pub fn update_networks(&mut self, networks: Vec<Network>) -> Result<bool, anyhow::Error> {
         let mut new = false;
         let mut ids = HashSet::new();
