@@ -105,6 +105,7 @@ pub fn display_network<B: Backend>(
         .iter()
         .map(|m| {
             let authed = m.config.clone().unwrap().authorized.unwrap_or_default();
+            let caps = m.config.clone().unwrap().capabilities.unwrap();
 
             Row::new(vec![
                 Cell::from(Span::styled(
@@ -145,6 +146,13 @@ pub fn display_network<B: Backend>(
                         Color::LightRed
                     }),
                 )),
+                Cell::from(Span::styled(
+                    caps.iter()
+                        .map(|x| format!("{}", x))
+                        .collect::<Vec<String>>()
+                        .join(", "),
+                    Style::default().fg(Color::LightGreen),
+                )),
             ])
         })
         .collect::<Vec<Row>>();
@@ -159,6 +167,7 @@ pub fn display_network<B: Backend>(
             Constraint::Length(25),
             Constraint::Length(25),
             Constraint::Length(8),
+            Constraint::Length(15),
         ])
         .highlight_style(Style::default().add_modifier(Modifier::BOLD))
         .highlight_symbol("> ");
