@@ -24,6 +24,6 @@ portable-pty = "*"
 fancy-duration = { version = "*" }
 time = { version = "^0.3", features = [ "local-offset" ] }
 lazy_static = "*"
-nix = "*"
+nix = "0.24"
 signal = "*"
 openssl = { version = "*", features = [ "vendored" ] }
