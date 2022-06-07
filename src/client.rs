@@ -15,6 +15,8 @@ use tokio::sync::mpsc;
 use zerotier_central_api::{types::Member, Client, ResponseValue};
 use zerotier_one_api::types::Network;
 
+use crate::app::NetworkFlag;
+
 // address of Central
 const CENTRAL_BASEURL: &str = "https://my.zerotier.com/api/v1";
 
@@ -337,6 +339,64 @@ pub fn sync_delete_member(
     t.spawn(async move {
         s.send(client.delete_network_member(&network_id, &id).await)
             .unwrap();
+    });
+
+    let timeout = Instant::now();
+
+    loop {
+        if let Ok(res) = r.try_recv() {
+            t.shutdown_background();
+            return Ok(res?);
+        } else {
+            std::thread::sleep(Duration::new(0, 10));
+        }
+
+        if timeout.elapsed() > Duration::new(3, 0) {
+            t.shutdown_background();
+            return Err(anyhow!("timeout reading from zerotier"));
+        }
+    }
+}
+
+macro_rules! true_or_none {
+    ($code:expr) => {
+        $code = $code.map_or(Some(false), |m| Some(!m));
+    };
+}
+
+pub fn toggle_flag(id: String, flag: NetworkFlag) -> Result<ResponseValue<Network>, anyhow::Error> {
+    let (s, mut r) = mpsc::unbounded_channel();
+
+    let t = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?;
+
+    t.spawn(async move {
+        let local = local_client_from_file(authtoken_path(None)).unwrap();
+        let mut network = match local.get_network(&id.clone()).await {
+            Ok(network) => network,
+            Err(e) => {
+                s.send(Err(e)).unwrap();
+                return;
+            }
+        };
+
+        match flag {
+            NetworkFlag::AllowDNS => {
+                true_or_none!(network.subtype_0.allow_dns);
+            }
+            NetworkFlag::AllowGlobal => {
+                true_or_none!(network.subtype_0.allow_global);
+            }
+            NetworkFlag::AllowManaged => {
+                true_or_none!(network.subtype_0.allow_managed);
+            }
+            NetworkFlag::AllowDefault => {
+                true_or_none!(network.subtype_0.allow_default);
+            }
+        }
+
+        s.send(local.update_network(&id, &network).await).unwrap();
     });
 
     let timeout = Instant::now();

@@ -43,6 +43,13 @@ pub enum ListFilter {
     Connected,
 }
 
+pub enum NetworkFlag {
+    AllowDNS,
+    AllowManaged,
+    AllowGlobal,
+    AllowDefault,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Dialog {
     None,
@@ -52,6 +59,7 @@ pub enum Dialog {
     APIKey(String),
     RenameMember(String, String),
     AddMember(String),
+    NetworkFlags(String),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -327,100 +335,127 @@ impl App {
                 },
                 _ => {}
             },
-            Page::Networks => match key.code {
-                KeyCode::Up => {
-                    if let Some(pos) = lock.network_state.selected() {
-                        if pos > 0 {
-                            lock.network_state.select(Some(pos - 1));
-                        }
+            Page::Networks => match self.dialog.clone() {
+                Dialog::NetworkFlags(id) => match key.code {
+                    KeyCode::Char('n') => {
+                        crate::client::toggle_flag(id, NetworkFlag::AllowDNS)?;
                     }
-                }
-                KeyCode::Down => {
-                    let pos = lock.network_state.selected().unwrap_or_default() + 1;
-                    let count = lock
-                        .idx_iter()
-                        .filter(|x| {
-                            if let ListFilter::Connected = lock.filter() {
-                                lock.get(&x).unwrap().subtype_1.status.clone().unwrap()
-                                    != STATUS_DISCONNECTED
-                            } else {
-                                true
+                    KeyCode::Char('d') => {
+                        crate::client::toggle_flag(id, NetworkFlag::AllowDefault)?;
+                    }
+                    KeyCode::Char('g') => {
+                        crate::client::toggle_flag(id, NetworkFlag::AllowGlobal)?;
+                    }
+                    KeyCode::Char('m') => {
+                        crate::client::toggle_flag(id, NetworkFlag::AllowManaged)?;
+                    }
+                    KeyCode::Esc | KeyCode::Char('q') => {
+                        self.dialog = Dialog::None;
+                    }
+                    _ => {}
+                },
+                Dialog::None => match key.code {
+                    KeyCode::Up => {
+                        if let Some(pos) = lock.network_state.selected() {
+                            if pos > 0 {
+                                lock.network_state.select(Some(pos - 1));
                             }
-                        })
-                        .count();
-                    if pos < count {
-                        lock.network_state.select(Some(pos))
-                    }
-                }
-                KeyCode::Esc => {
-                    self.dialog = Dialog::None;
-                    self.editing_mode = EditingMode::Command;
-                }
-                KeyCode::Char(c) => match c {
-                    'q' => return Ok(true),
-                    'd' => {
-                        let pos = lock.network_state.selected().unwrap_or_default();
-                        lock.remove_network(pos);
-                    }
-                    'l' => {
-                        let pos = lock.network_state.selected().unwrap_or_default();
-                        let id = lock.get_network_id_by_pos(pos);
-                        crate::client::leave_network(id)?;
-                    }
-                    'j' => {
-                        let pos = lock.network_state.selected().unwrap_or_default();
-                        let id = lock.get_network_id_by_pos(pos);
-                        crate::client::join_network(id)?;
-                    }
-                    'J' => {
-                        self.dialog = Dialog::Join;
-                        self.editing_mode = EditingMode::Editing;
-                        self.inputbuffer = String::new();
-                    }
-                    'c' => {
-                        self.inputbuffer = serde_json::to_string_pretty(&lock.get_network_by_pos(
-                            lock.network_state.selected().unwrap_or_default(),
-                        ))?;
-                        self.dialog = Dialog::Config;
-                    }
-                    't' => {
-                        let filter = match lock.filter() {
-                            ListFilter::None => ListFilter::Connected,
-                            ListFilter::Connected => ListFilter::None,
-                        };
-
-                        lock.set_filter(filter);
-                        lock.network_state.select(Some(0));
-                    }
-                    'h' => {
-                        self.dialog = match self.dialog {
-                            Dialog::Help => Dialog::None,
-                            _ => Dialog::Help,
                         }
                     }
-                    's' => {
-                        let id = lock.get_network_id_by_pos(
-                            lock.network_state.selected().unwrap_or_default(),
-                        );
-                        let key = lock.api_key_for_id(id.clone());
-                        if let Some(_) = key {
-                            self.member_state.select(Some(0));
-                            lock.page = Page::Network(id)
-                        } else {
-                            self.dialog = Dialog::APIKey(id);
+                    KeyCode::Down => {
+                        let pos = lock.network_state.selected().unwrap_or_default() + 1;
+                        let count = lock
+                            .idx_iter()
+                            .filter(|x| {
+                                if let ListFilter::Connected = lock.filter() {
+                                    lock.get(&x).unwrap().subtype_1.status.clone().unwrap()
+                                        != STATUS_DISCONNECTED
+                                } else {
+                                    true
+                                }
+                            })
+                            .count();
+                        if pos < count {
+                            lock.network_state.select(Some(pos))
+                        }
+                    }
+                    KeyCode::Esc => {
+                        self.dialog = Dialog::None;
+                        self.editing_mode = EditingMode::Command;
+                    }
+                    KeyCode::Char(c) => match c {
+                        'q' => return Ok(true),
+                        'd' => {
+                            let pos = lock.network_state.selected().unwrap_or_default();
+                            lock.remove_network(pos);
+                        }
+                        'l' => {
+                            let pos = lock.network_state.selected().unwrap_or_default();
+                            let id = lock.get_network_id_by_pos(pos);
+                            crate::client::leave_network(id)?;
+                        }
+                        'j' => {
+                            let pos = lock.network_state.selected().unwrap_or_default();
+                            let id = lock.get_network_id_by_pos(pos);
+                            crate::client::join_network(id)?;
+                        }
+                        'J' => {
+                            self.dialog = Dialog::Join;
                             self.editing_mode = EditingMode::Editing;
                             self.inputbuffer = String::new();
                         }
-                    }
-                    x => {
-                        if let Some(net) = lock
-                            .get_network_by_pos(lock.network_state.selected().unwrap_or_default())
-                        {
-                            if let Some(s) = lock.user_config().command_for_network(x, net) {
-                                App::run_command(terminal, s)?;
+                        'c' => {
+                            self.inputbuffer =
+                                serde_json::to_string_pretty(&lock.get_network_by_pos(
+                                    lock.network_state.selected().unwrap_or_default(),
+                                ))?;
+                            self.dialog = Dialog::Config;
+                        }
+                        't' => {
+                            let filter = match lock.filter() {
+                                ListFilter::None => ListFilter::Connected,
+                                ListFilter::Connected => ListFilter::None,
+                            };
+
+                            lock.set_filter(filter);
+                            lock.network_state.select(Some(0));
+                        }
+                        'h' => {
+                            self.dialog = match self.dialog {
+                                Dialog::Help => Dialog::None,
+                                _ => Dialog::Help,
                             }
                         }
-                    }
+                        's' => {
+                            let id = lock.get_network_id_by_pos(
+                                lock.network_state.selected().unwrap_or_default(),
+                            );
+                            let key = lock.api_key_for_id(id.clone());
+                            if let Some(_) = key {
+                                self.member_state.select(Some(0));
+                                lock.page = Page::Network(id)
+                            } else {
+                                self.dialog = Dialog::APIKey(id);
+                                self.editing_mode = EditingMode::Editing;
+                                self.inputbuffer = String::new();
+                            }
+                        }
+                        'f' => {
+                            let pos = lock.network_state.selected().unwrap_or_default();
+                            let id = lock.get_network_id_by_pos(pos);
+                            self.dialog = Dialog::NetworkFlags(id);
+                        }
+                        x => {
+                            if let Some(net) = lock.get_network_by_pos(
+                                lock.network_state.selected().unwrap_or_default(),
+                            ) {
+                                if let Some(s) = lock.user_config().command_for_network(x, net) {
+                                    App::run_command(terminal, s)?;
+                                }
+                            }
+                        }
+                    },
+                    _ => {}
                 },
                 _ => {}
             },

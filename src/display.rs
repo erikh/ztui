@@ -13,6 +13,7 @@ use tui::{
     Frame,
 };
 use zerotier_central_api::types::Member;
+use zerotier_one_api::types::Network;
 
 use crate::{
     app::{App, Dialog, ListFilter, Page, STATUS_DISCONNECTED},
@@ -61,12 +62,157 @@ fn dialog_join<B: Backend>(f: &mut Frame<B>, app: &mut App) {
     dialog(f, app, 10, "Join a Network".to_string())
 }
 
+lazy_static::lazy_static! {
+static ref HELP_TEXT: Vec<Vec<[&'static str; 2]>> = vec![
+    vec![
+        ["Up/Down", "Navigate the List"],
+        ["<Esc>", "back out of something"],
+        ["d", "Delete a list member"],
+        ["q", "Quit"],
+        ["j", "Join a bookmarked network"],
+        ["l", "Leave a bookmarked network"],
+        ["J", "Join a network by address"],
+        ["c", "review network settings"],
+        ["t", "toggle disconnected in list"],
+        ["s", "show network members (requires API key)"],
+    ],
+    vec![
+        ["Up/Down", "Navigate the List"],
+        ["q", "quit to networks screen"],
+        ["r", "Rename a Member"],
+        ["a", "Authorize a deauthorized member"],
+        ["A", "Authorize an arbitrary member ID"],
+        ["d", "Deauthorize an authorized member"],
+        ["D", "Delete a member"],
+    ],
+];
+}
+
+pub fn dialog_help<B: Backend>(f: &mut Frame<B>, page: Page) -> Result<(), anyhow::Error> {
+    let size = f.size();
+    let w = size.width;
+    let h = size.height;
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title(Span::from("[ Help ]"));
+
+    let help_text = &HELP_TEXT[match page {
+        Page::Networks => 0,
+        Page::Network(_) => 1,
+    }];
+
+    let rows = help_text
+        .iter()
+        .map(|s| {
+            Row::new(vec![
+                Cell::from(s[0].to_string()),
+                Cell::from(s[1].to_string()),
+            ])
+        })
+        .collect::<Vec<Row>>();
+
+    let table = Table::new(rows)
+        .block(block)
+        .widths(&[Constraint::Length(10), Constraint::Percentage(100)]);
+
+    let mut rect = Rect::default();
+    rect.x = w / 4;
+    rect.y = h / 4;
+    rect.width = w / 2;
+    rect.height = h / 2;
+    f.render_widget(Clear, rect);
+    f.render_widget(table, rect);
+    Ok(())
+}
+
+fn dialog_flags<B: Backend>(f: &mut Frame<B>, _app: &mut App, network: Network) {
+    let size = f.size();
+    let w = size.width;
+    let h = size.height;
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title(Span::from("[ Set Flags ]"));
+
+    let rows = vec![
+        Row::new(vec![
+            Cell::from(Span::styled(
+                format!("Allow D[n]S",),
+                Style::default().fg(Color::White),
+            )),
+            Cell::from(Span::styled(
+                format!("{}", network.subtype_0.allow_dns.unwrap_or_default()),
+                Style::default().fg(if network.subtype_0.allow_dns.unwrap_or_default() {
+                    Color::LightGreen
+                } else {
+                    Color::LightRed
+                }),
+            )),
+        ]),
+        Row::new(vec![
+            Cell::from(Span::styled(
+                format!("Allow [D]efault",),
+                Style::default().fg(Color::White),
+            )),
+            Cell::from(Span::styled(
+                format!("{}", network.subtype_0.allow_default.unwrap_or_default()),
+                Style::default().fg(if network.subtype_0.allow_default.unwrap_or_default() {
+                    Color::LightGreen
+                } else {
+                    Color::LightRed
+                }),
+            )),
+        ]),
+        Row::new(vec![
+            Cell::from(Span::styled(
+                format!("Allow [M]anaged",),
+                Style::default().fg(Color::White),
+            )),
+            Cell::from(Span::styled(
+                format!("{}", network.subtype_0.allow_managed.unwrap_or_default()),
+                Style::default().fg(if network.subtype_0.allow_managed.unwrap_or_default() {
+                    Color::LightGreen
+                } else {
+                    Color::LightRed
+                }),
+            )),
+        ]),
+        Row::new(vec![
+            Cell::from(Span::styled(
+                format!("Allow [G]lobal",),
+                Style::default().fg(Color::White),
+            )),
+            Cell::from(Span::styled(
+                format!("{}", network.subtype_0.allow_global.unwrap_or_default()),
+                Style::default().fg(if network.subtype_0.allow_global.unwrap_or_default() {
+                    Color::LightGreen
+                } else {
+                    Color::LightRed
+                }),
+            )),
+        ]),
+    ];
+
+    let table = Table::new(rows)
+        .block(block)
+        .widths(&[Constraint::Percentage(50), Constraint::Percentage(50)]);
+
+    let mut rect = Rect::default();
+    rect.x = w / 4;
+    rect.y = h / 4;
+    rect.width = w / 2;
+    rect.height = h / 2;
+    f.render_widget(Clear, rect);
+    f.render_widget(table, rect);
+}
+
 pub fn display_dialogs<B: Backend>(
     f: &mut Frame<'_, B>,
     app: &mut App,
     settings: Arc<Mutex<Settings>>,
 ) -> Result<(), anyhow::Error> {
-    match app.dialog {
+    match app.dialog.clone() {
         Dialog::Join => {
             dialog_join(f, app);
         }
@@ -81,6 +227,9 @@ pub fn display_dialogs<B: Backend>(
         }
         Dialog::AddMember(_) => {
             dialog_add_member(f, app);
+        }
+        Dialog::NetworkFlags(id) => {
+            dialog_flags(f, app, settings.lock().unwrap().get(&id).unwrap().clone());
         }
         _ => {}
     }
@@ -290,69 +439,5 @@ pub fn display_networks<B: Backend>(
         .highlight_symbol("> ");
 
     f.render_stateful_widget(table, list[0], &mut lock.network_state);
-    Ok(())
-}
-
-lazy_static::lazy_static! {
-static ref HELP_TEXT: Vec<Vec<[&'static str; 2]>> = vec![
-    vec![
-        ["Up/Down", "Navigate the List"],
-        ["<Esc>", "back out of something"],
-        ["d", "Delete a list member"],
-        ["q", "Quit"],
-        ["j", "Join a bookmarked network"],
-        ["l", "Leave a bookmarked network"],
-        ["J", "Join a network by address"],
-        ["c", "review network settings"],
-        ["t", "toggle disconnected in list"],
-        ["s", "show network members (requires API key)"],
-    ],
-    vec![
-        ["Up/Down", "Navigate the List"],
-        ["q", "quit to networks screen"],
-        ["r", "Rename a Member"],
-        ["a", "Authorize a deauthorized member"],
-        ["A", "Authorize an arbitrary member ID"],
-        ["d", "Deauthorize an authorized member"],
-        ["D", "Delete a member"],
-    ],
-];
-}
-
-pub fn dialog_help<B: Backend>(f: &mut Frame<B>, page: Page) -> Result<(), anyhow::Error> {
-    let size = f.size();
-    let w = size.width;
-    let h = size.height;
-
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .title(Span::from("[ Help ]"));
-
-    let help_text = &HELP_TEXT[match page {
-        Page::Networks => 0,
-        Page::Network(_) => 1,
-    }];
-
-    let rows = help_text
-        .iter()
-        .map(|s| {
-            Row::new(vec![
-                Cell::from(s[0].to_string()),
-                Cell::from(s[1].to_string()),
-            ])
-        })
-        .collect::<Vec<Row>>();
-
-    let table = Table::new(rows)
-        .block(block)
-        .widths(&[Constraint::Length(10), Constraint::Percentage(100)]);
-
-    let mut rect = Rect::default();
-    rect.x = w / 4;
-    rect.y = h / 4;
-    rect.width = w / 2;
-    rect.height = h / 2;
-    f.render_widget(Clear, rect);
-    f.render_widget(table, rect);
     Ok(())
 }
