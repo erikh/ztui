@@ -27,3 +27,4 @@ lazy_static = "*"
 nix = "0.24"
 signal = "*"
 openssl = { version = "*", features = [ "vendored" ] }
+tempfile = "*"

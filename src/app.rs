@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
     io::{Read, Write},
+    process::Stdio,
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
@@ -11,9 +12,8 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use serde::{Deserialize, Serialize};
-use signal::Signal::{SIGCHLD, SIGINT, SIGTERM};
+use tempfile::NamedTempFile;
 use tokio::sync::mpsc;
 use tui::{
     backend::{Backend, CrosstermBackend},
@@ -326,7 +326,7 @@ impl App {
                                     if let Some(s) =
                                         lock.user_config().command_for_member(x, member)
                                     {
-                                        App::run_command(terminal, s)?;
+                                        App::run_command(terminal, true, s)?;
                                     }
                                 }
                             }
@@ -445,12 +445,46 @@ impl App {
                             let id = lock.get_network_id_by_pos(pos);
                             self.dialog = Dialog::NetworkFlags(id);
                         }
+                        'e' => {
+                            let pos = lock.network_state.selected().unwrap_or_default();
+                            if let Some(network) = lock.get_network_by_pos(pos) {
+                                if let Some(api_key) =
+                                    lock.api_key_for_id(network.subtype_1.id.clone().unwrap())
+                                {
+                                    let client = central_client(api_key.to_string())?;
+                                    let net = crate::client::sync_get_network(
+                                        client.clone(),
+                                        network.subtype_1.id.clone().unwrap(),
+                                    )?;
+
+                                    let mut tf = NamedTempFile::new()?;
+
+                                    tf.write_all(net.rules_source.clone().unwrap().as_bytes())?;
+                                    let path = tf.into_temp_path();
+                                    let modif = path.metadata()?.modified()?;
+
+                                    App::run_command(
+                                        terminal,
+                                        false,
+                                        format!("$EDITOR {}", path.display()),
+                                    )?;
+
+                                    if path.metadata()?.modified()? != modif {
+                                        crate::client::sync_apply_network_rules(
+                                            client,
+                                            network.subtype_1.id.clone().unwrap(),
+                                            std::fs::read_to_string(path)?,
+                                        )?;
+                                    }
+                                }
+                            }
+                        }
                         x => {
                             if let Some(net) = lock.get_network_by_pos(
                                 lock.network_state.selected().unwrap_or_default(),
                             ) {
                                 if let Some(s) = lock.user_config().command_for_network(x, net) {
-                                    App::run_command(terminal, s)?;
+                                    App::run_command(terminal, true, s)?;
                                 }
                             }
                         }
@@ -538,74 +572,73 @@ impl App {
 
     fn run_command<W: Write>(
         terminal: &mut Terminal<CrosstermBackend<W>>,
+        trap: bool, // wrap the terminal for pty, signal handling
         s: String,
     ) -> Result<(), anyhow::Error> {
-        let mut args = vec!["-c"];
-        args.push(&s);
+        let mut args: Vec<String> = vec!["-c".to_string()];
+        args.push(s);
+
+        terminal.clear()?;
+        let (sc, mut r) = mpsc::unbounded_channel();
+        let t = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()?;
 
         crate::temp_mute_terminal!(terminal, {
-            terminal.clear()?;
+            let s2 = sc.clone();
+            t.spawn(async move {
+                // let pty_system = native_pty_system();
+                // let pair = pty_system.openpty(PtySize {
+                //     rows: terminal.size().unwrap().height,
+                //     cols: terminal.size().unwrap().width,
+                //     pixel_width: 0,
+                //     pixel_height: 0,
+                // })?;
 
-            let pty_system = native_pty_system();
-            let pair = pty_system.openpty(PtySize {
-                rows: terminal.size().unwrap().height,
-                cols: terminal.size().unwrap().width,
-                pixel_width: 0,
-                pixel_height: 0,
-            })?;
+                // let mut cmd = CommandBuilder::new("/bin/sh");
+                // cmd.args(args);
 
-            let mut cmd = CommandBuilder::new("/bin/sh");
-            cmd.args(args);
+                let mut child = tokio::process::Command::new("/bin/sh")
+                    .args(args)
+                    .stdin(Stdio::inherit())
+                    .stdout(Stdio::inherit())
+                    .stderr(Stdio::inherit())
+                    .spawn()
+                    .unwrap();
 
-            let (s, mut r) = mpsc::unbounded_channel();
+                let pid = child.id();
 
-            let mut child = pair.slave.spawn_command(cmd).unwrap();
-            let pid = child.process_id().unwrap();
+                tokio::spawn(async move {
+                    if trap {
+                        let _ = tokio::signal::ctrl_c().await;
 
-            let mut reader = pair.master.try_clone_reader().unwrap();
-            let mut writer = pair.master.try_clone_writer().unwrap();
-
-            std::thread::spawn(move || {
-                std::io::copy(&mut reader, &mut std::io::stdout().lock()).unwrap();
-            });
-
-            std::thread::spawn(move || {
-                let mut buf = [0u8; 1];
-
-                while let Ok(size) = std::io::stdin().lock().read(&mut buf) {
-                    writer.write_all(&buf[0..size]).unwrap();
-
-                    if let Ok(_) = r.try_recv() {
-                        return;
-                    }
-                }
-            });
-
-            let trap = signal::trap::Trap::trap(&[SIGINT, SIGTERM, SIGCHLD]);
-
-            for sig in trap {
-                match sig {
-                    SIGCHLD => {
-                        child.wait()?;
-                    }
-                    _ => {
                         nix::sys::signal::kill(
-                            nix::unistd::Pid::from_raw(pid as i32),
+                            nix::unistd::Pid::from_raw(pid.unwrap() as i32),
                             Some(nix::sys::signal::SIGTERM),
                         )
                         .unwrap();
                     }
-                }
-                break;
-            }
-            s.send(()).unwrap();
+                });
 
-            eprintln!("\nPress ENTER to continue");
-            let mut buf = [0u8; 1];
-            std::io::stdin().lock().read(&mut buf).unwrap();
+                s2.send(child.wait().await).unwrap();
+            });
         });
 
+        loop {
+            if let Ok(_) = r.try_recv() {
+                break;
+            } else {
+                std::thread::sleep(Duration::new(0, 10))
+            }
+        }
+
+        t.shutdown_background();
+        drop(sc);
+        eprintln!("\nPress ENTER to continue");
+        let mut buf = [0u8; 1];
+        let _ = std::io::stdin().read(&mut buf).unwrap();
         terminal.clear()?;
+
         Ok(())
     }
 }

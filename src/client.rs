@@ -12,6 +12,7 @@ use std::{
 use anyhow::anyhow;
 use http::{HeaderMap, HeaderValue};
 use tokio::sync::mpsc;
+use zerotier_central_api::types::Network as CentralNetwork;
 use zerotier_central_api::{types::Member, Client, ResponseValue};
 use zerotier_one_api::types::Network;
 
@@ -397,6 +398,68 @@ pub fn toggle_flag(id: String, flag: NetworkFlag) -> Result<ResponseValue<Networ
         }
 
         s.send(local.update_network(&id, &network).await).unwrap();
+    });
+
+    let timeout = Instant::now();
+
+    loop {
+        if let Ok(res) = r.try_recv() {
+            t.shutdown_background();
+            return Ok(res?);
+        } else {
+            std::thread::sleep(Duration::new(0, 10));
+        }
+
+        if timeout.elapsed() > Duration::new(3, 0) {
+            t.shutdown_background();
+            return Err(anyhow!("timeout reading from zerotier"));
+        }
+    }
+}
+
+pub fn sync_get_network(
+    client: Client,
+    network_id: String,
+) -> Result<ResponseValue<CentralNetwork>, anyhow::Error> {
+    let (s, mut r) = mpsc::unbounded_channel();
+
+    let t = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?;
+    t.spawn(async move { s.send(client.get_network_by_id(&network_id).await).unwrap() });
+
+    let timeout = Instant::now();
+
+    loop {
+        if let Ok(res) = r.try_recv() {
+            t.shutdown_background();
+            return Ok(res?);
+        } else {
+            std::thread::sleep(Duration::new(0, 10));
+        }
+
+        if timeout.elapsed() > Duration::new(3, 0) {
+            t.shutdown_background();
+            return Err(anyhow!("timeout reading from zerotier"));
+        }
+    }
+}
+
+pub fn sync_apply_network_rules(
+    client: Client,
+    network_id: String,
+    rules: String,
+) -> Result<ResponseValue<CentralNetwork>, anyhow::Error> {
+    let (s, mut r) = mpsc::unbounded_channel();
+
+    let t = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?;
+    t.spawn(async move {
+        let mut net = client.get_network_by_id(&network_id).await.unwrap();
+        net.rules_source = Some(rules);
+        let res = client.update_network(&network_id, &net).await;
+        s.send(res).unwrap();
     });
 
     let timeout = Instant::now();

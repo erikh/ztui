@@ -2394,6 +2394,7 @@ dependencies = [
  "serde_json",
  "signal",
  "sys_metrics",
+ "tempfile",
  "time 0.3.9",
  "tokio",
  "tui",
