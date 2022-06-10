@@ -10,6 +10,7 @@ transform how people work with it. It provides the following features:
   - Per-Network bandwidth statistics
   - Bind arbitrary commands to keys that use a template to launch (see more on this below)
   - Review the network JSON formatted pretty
+  - Launch `$EDITOR` against a file of network rules (and save them back to central)
 - Central / Member List:
   - Rename members
   - Auth, Unauth, and Delete members
