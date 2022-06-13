@@ -9,7 +9,7 @@ use zerotier_central_api::types::Member;
 use zerotier_one_api::types::Network;
 
 use crate::{
-    app::{ListFilter, Page},
+    app::{ListFilter, Page, STATUS_DISCONNECTED},
     nets::Nets,
 };
 
@@ -219,6 +219,18 @@ impl Settings {
 
     pub fn idx_iter(&self) -> impl Iterator<Item = &String> {
         self.savednetworksidx.iter()
+    }
+
+    pub fn count(&self) -> usize {
+        self.idx_iter()
+            .filter(|x| {
+                if let ListFilter::Connected = self.filter() {
+                    self.get(&x).unwrap().subtype_1.status.clone().unwrap() != STATUS_DISCONNECTED
+                } else {
+                    true
+                }
+            })
+            .count()
     }
 
     pub fn api_key_for_id(&self, id: String) -> Option<&String> {

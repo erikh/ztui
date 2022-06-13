@@ -25,6 +25,10 @@ impl Nets {
         })
     }
 
+    pub fn len(&self) -> usize {
+        self.nets.len()
+    }
+
     pub fn refresh(&mut self) -> Result<(), anyhow::Error> {
         self.nets = sys_metrics::network::get_ionets()?;
         Ok(())

@@ -356,25 +356,13 @@ impl App {
                 },
                 Dialog::None => match key.code {
                     KeyCode::Up => {
-                        if let Some(pos) = lock.network_state.selected() {
-                            if pos > 0 {
-                                lock.network_state.select(Some(pos - 1));
-                            }
-                        }
+                        let pos = lock.network_state.selected().unwrap_or_default();
+                        lock.network_state
+                            .select(if pos > 0 { Some(pos - 1) } else { Some(0) });
                     }
                     KeyCode::Down => {
                         let pos = lock.network_state.selected().unwrap_or_default() + 1;
-                        let count = lock
-                            .idx_iter()
-                            .filter(|x| {
-                                if let ListFilter::Connected = lock.filter() {
-                                    lock.get(&x).unwrap().subtype_1.status.clone().unwrap()
-                                        != STATUS_DISCONNECTED
-                                } else {
-                                    true
-                                }
-                            })
-                            .count();
+                        let count = lock.count();
                         if pos < count {
                             lock.network_state.select(Some(pos))
                         }
@@ -418,7 +406,7 @@ impl App {
                             };
 
                             lock.set_filter(filter);
-                            lock.network_state.select(Some(0));
+                            lock.network_state.select(Some(0))
                         }
                         'h' => {
                             self.dialog = match self.dialog {
