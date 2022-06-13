@@ -25,11 +25,13 @@ Members List / Network View:
 
 ## Installing
 
-Get [Rust](https://www.rustup.rs) 1.60 or better if you need to.
+Get [Rust](https://www.rustup.rs) 1.60 or better if you need to. You'll need it.
 
 ```
 cargo install --git https://github.com/erikh/ztui
 ```
+
+You may also appreciate our [Releases](https://github.com/erikh/ztui/releases)!
 
 ## Configuring arbitrary commands
 
