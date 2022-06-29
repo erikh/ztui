@@ -25,6 +25,7 @@ impl Nets {
         })
     }
 
+    #[allow(unused)]
     pub fn len(&self) -> usize {
         self.nets.len()
     }
