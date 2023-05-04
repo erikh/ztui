@@ -1,6 +1,6 @@
 [package]
 name = "ztui"
-version = "0.1.5"
+version = "0.1.6"
 edition = "2021"
 readme = "README.md"
 description = "ztui is a terminal UI for zerotier"
