@@ -2,29 +2,33 @@
 name = "ztui"
 version = "0.1.5"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+readme = "README.md"
+description = "ztui is a terminal UI for zerotier"
+authors = ["Erik Hollensbe <erik+github@hollensbe.org>"]
+license = "AGPL 3"
+homepage = "https://github.com/erikh/ztui"
+repository = "https://github.com/erikh/ztui"
 
 [dependencies]
-sys_metrics = "*"
-tokio = { version = "*", features = [ "full" ] }
-crossterm = "*"
-tui = "*"
-anyhow = "*"
-zerotier-one-api = "*"
-zerotier-central-api = "*"
-http = "*"
-reqwest = "*"
-serde_json = "*"
-serde = "*"
-directories = "*"
-bat = { version = "*", default-features = false, features = [ "minimal-application" ] }
-byte-unit = "*"
-portable-pty = "*"
-fancy-duration = { version = "*" }
+sys_metrics = "^0.2.0"
+tokio = { version = "^1.28.0", features = [ "full" ] }
+crossterm = "^0.26.0"
+tui = "^0.19.0"
+anyhow = "^1.0.0"
+zerotier-one-api = "1.2.1"
+zerotier-central-api = "1.2.1"
+http = "^0.2.0"
+reqwest = "^0.11.0"
+serde_json = "^1.0"
+serde = "^1.0"
+directories = "^5.0.0"
+bat = { version = "^0.23.0", default-features = false, features = [ "minimal-application" ] }
+byte-unit = "^4.0.0"
+portable-pty = "^0.8.0"
+fancy-duration = "^0.2.0"
 time = { version = "^0.3", features = [ "local-offset" ] }
-lazy_static = "*"
+lazy_static = "^1.4.0"
 nix = "0.24"
-signal = "*"
-openssl = { version = "*", features = [ "vendored" ] }
-tempfile = "*"
+signal = "^0.7.0"
+openssl = { version = "^0.10.0", features = [ "vendored" ] }
+tempfile = "^3.5.0"
