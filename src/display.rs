@@ -89,7 +89,7 @@ static ref HELP_TEXT: Vec<Vec<[&'static str; 2]>> = vec![
 ];
 }
 
-pub fn dialog_help<B: Backend>(f: &mut Frame<B>, page: Page) -> Result<(), anyhow::Error> {
+pub fn dialog_help<B: Backend>(f: &mut Frame<B>, page: Page) {
     let size = f.size();
     let w = size.width;
     let h = size.height;
@@ -124,7 +124,6 @@ pub fn dialog_help<B: Backend>(f: &mut Frame<B>, page: Page) -> Result<(), anyho
     rect.height = h / 2;
     f.render_widget(Clear, rect);
     f.render_widget(table, rect);
-    Ok(())
 }
 
 fn dialog_flags<B: Backend>(f: &mut Frame<B>, _app: &mut App, network: Network) {
@@ -212,7 +211,7 @@ pub fn display_dialogs<B: Backend>(
     f: &mut Frame<'_, B>,
     app: &mut App,
     settings: Arc<Mutex<Settings>>,
-) -> Result<(), anyhow::Error> {
+) {
     match app.dialog.clone() {
         Dialog::Join => {
             dialog_join(f, app);
@@ -221,7 +220,7 @@ pub fn display_dialogs<B: Backend>(
             dialog_api_key(f, app);
         }
         Dialog::Help => {
-            dialog_help(f, settings.lock().unwrap().page.clone())?;
+            dialog_help(f, settings.lock().unwrap().page.clone());
         }
         Dialog::RenameMember(_, _) => {
             dialog_rename_member(f, app);
@@ -234,8 +233,6 @@ pub fn display_dialogs<B: Backend>(
         }
         _ => {}
     }
-
-    Ok(())
 }
 
 pub fn display_network<B: Backend>(

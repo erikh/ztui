@@ -197,7 +197,7 @@ impl App {
             }
         }
 
-        crate::display::display_dialogs(f, self, settings)?;
+        crate::display::display_dialogs(f, self, settings);
         Ok(())
     }
 
