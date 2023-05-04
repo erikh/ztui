@@ -335,19 +335,19 @@ impl App {
                 },
                 _ => {}
             },
-            Page::Networks => match self.dialog.clone() {
+            Page::Networks => match &self.dialog {
                 Dialog::NetworkFlags(id) => match key.code {
                     KeyCode::Char('n') => {
-                        crate::client::toggle_flag(id, NetworkFlag::AllowDNS)?;
+                        crate::client::toggle_flag(id.to_string(), NetworkFlag::AllowDNS)?;
                     }
                     KeyCode::Char('d') => {
-                        crate::client::toggle_flag(id, NetworkFlag::AllowDefault)?;
+                        crate::client::toggle_flag(id.to_string(), NetworkFlag::AllowDefault)?;
                     }
                     KeyCode::Char('g') => {
-                        crate::client::toggle_flag(id, NetworkFlag::AllowGlobal)?;
+                        crate::client::toggle_flag(id.to_string(), NetworkFlag::AllowGlobal)?;
                     }
                     KeyCode::Char('m') => {
-                        crate::client::toggle_flag(id, NetworkFlag::AllowManaged)?;
+                        crate::client::toggle_flag(id.to_string(), NetworkFlag::AllowManaged)?;
                     }
                     KeyCode::Esc | KeyCode::Char('q') => {
                         self.dialog = Dialog::None;
@@ -477,6 +477,12 @@ impl App {
                             }
                         }
                     },
+                    _ => {}
+                },
+                Dialog::Help => match key.code {
+                    KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('h') => {
+                        self.dialog = Dialog::None;
+                    }
                     _ => {}
                 },
                 _ => {}
