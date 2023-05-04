@@ -5,7 +5,7 @@ edition = "2021"
 readme = "README.md"
 description = "ztui is a terminal UI for zerotier"
 authors = ["Erik Hollensbe <erik+github@hollensbe.org>"]
-license = "AGPL 3"
+license = "AGPL-3.0-or-later"
 homepage = "https://github.com/erikh/ztui"
 repository = "https://github.com/erikh/ztui"
 
