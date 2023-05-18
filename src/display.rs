@@ -361,7 +361,10 @@ pub fn display_networks<B: Backend>(
     let rows = lock
         .idx_iter()
         .filter_map(|k| {
-            let v = lock.get(k).unwrap();
+            let v = match lock.get(k) {
+                Some(v) => v,
+                None => return None,
+            };
 
             if let ListFilter::Connected = lock.filter() {
                 if v.subtype_1.status.clone().unwrap() == STATUS_DISCONNECTED {

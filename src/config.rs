@@ -201,7 +201,11 @@ impl Settings {
 
     pub fn remove_network(&mut self, pos: usize) {
         let id = self.savednetworksidx[pos].clone();
-        self.savednetworksidx = self.savednetworksidx.splice(pos - 1..pos, []).collect();
+
+        let base = if pos > 0 { pos - 1 } else { pos };
+        let end = if pos > 0 { pos } else { pos + 1 };
+
+        self.savednetworksidx = self.savednetworksidx.splice(base..=end, []).collect();
         self.savednetworks.remove(&id);
     }
 
